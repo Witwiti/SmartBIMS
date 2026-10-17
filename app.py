@@ -310,7 +310,7 @@ def navigation_context():
         if session.get("moss_awaiting_profile"):
             moss_suggestions = ["Complete my profile"]
         else:
-            moss_suggestions = ["I need a certificate"]
+            moss_suggestions = ["I need a certificate", "I have a concern"]
     return {
         "page_title": page_title,
         "page_description": page_description,
@@ -418,7 +418,7 @@ def handle_incident_report(message, user):
             "Once your profile is complete, I'll be happy to help you report an incident."
         )
     text = " ".join(message.casefold().split())
-    incident_keywords = ("report", "issue", "problem", "emergency", "incident",
+    incident_keywords = ("report", "issue", "problem", "emergency", "incident", "concern",
                          "streetlight", "flood", "flooded", "road", "garbage",
                          "water", "electricity", "security", "light")
     if not any(kw in text for kw in incident_keywords):
@@ -595,6 +595,63 @@ def assistant_request_action(message, user):
         session.pop("pending_service_request", None)
 
     if pending:
+        if pending.get("type") == "incident":
+            if normalized in CANCELLATION_WORDS or normalized.startswith(("cancel ", "stop ")):
+                session.pop("pending_service_request", None)
+                return "Okay, I cancelled that. I haven't submitted a report."
+
+            if pending.get("stage") == "describe":
+                pending["description"] = message.strip()[:1000]
+                pending["stage"] = "location"
+
+            if pending.get("stage") == "location":
+                pending["location"] = message.strip()[:200]
+                pending["stage"] = "confirm"
+
+            if pending.get("stage") == "confirm":
+                if normalized in CONFIRMATION_WORDS or normalized.startswith(
+                    ("yes, ", "yes ", "confirm ", "submit ", "oo ")
+                ):
+                    category = pending.get("category", "other")
+                    with get_db() as db:
+                        db.execute(
+                            """INSERT INTO incidents (title, description, category, location, resident_id)
+                               VALUES (?, ?, ?, ?, ?)""",
+                            (
+                                pending["description"][:80],
+                                pending["description"],
+                                category,
+                                pending.get("location", ""),
+                                user["id"],
+                            ),
+                        )
+                        incident_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+                    session.pop("pending_service_request", None)
+                    log_activity(user["id"], "create_incident_via_moss", f"Incident #{incident_id} via Moss")
+                    return (
+                        f"Thank you! I've logged your concern (reference #{incident_id:04d}) "
+                        f"as a {category} issue. Barangay officials will review it and update the status. "
+                        "You can check your reports on the Incidents page."
+                    )
+                return (
+                    f"Please confirm: may I submit this concern? "
+                    f"Category: {pending.get('category', 'other').replace('_', ' ').title()}. "
+                    f"Description: {pending['description'][:80]}. "
+                    f"{'Location: ' + pending.get('location', '') if pending.get('location') else ''} "
+                    "Reply “yes” to submit or “cancel” to stop."
+                )
+
+            session["pending_service_request"] = pending
+            if pending["stage"] == "describe":
+                return (
+                    "Please describe your concern in detail (e.g., “Streetlight on Main Street "
+                    "has been out for 3 days”)."
+                )
+            if pending["stage"] == "location":
+                return (
+                    "Where is this happening? (e.g., street name, purok, landmark)"
+                )
+
         if normalized in CANCELLATION_WORDS or normalized.startswith(("cancel ", "stop ")):
             session.pop("pending_service_request", None)
             return "Okay, I cancelled that. I haven't submitted a request."
@@ -675,9 +732,20 @@ def assistant_request_action(message, user):
     if not profile_is_complete(user):
         session["moss_awaiting_profile"] = True
         return (
-            "Please complete your profile first before requesting a document. "
-            "Fill in your age, phone, purok, address, birthday, and sex in My profile, "
-            "then I’ll be happy to help you request a certificate."
+            "Please complete your profile first before I can help you with requests or concerns. "
+            "Fill in your age, phone, purok, address, birthday, and sex in My profile."
+        )
+
+    if normalized == "i have a concern":
+        session["pending_service_request"] = {
+            "resident_id": user["id"],
+            "type": "incident",
+            "stage": "describe",
+        }
+        return (
+            "I can help you report a concern to the barangay office. "
+            "Please describe your concern in detail (e.g., “Streetlight on Main Street "
+            "has been out for 3 days”)."
         )
 
     has_request_intent = any(phrase in normalized for phrase in REQUEST_INTENTS)
