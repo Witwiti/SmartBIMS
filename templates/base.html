@@ -96,9 +96,6 @@
                 <i data-lucide="settings"></i><span>Accounts</span>
             </a>
             {% endif %}
-            <a href="{{ url_for('profile_page') }}" class="bottom-nav-item {% if active_page == 'profile' %}active{% endif %}" aria-label="Profile">
-                <i data-lucide="circle-user-round"></i><span>Profile</span>
-            </a>
         </nav>
     </div>
     <details class="moss-widget {% if session.get('moss_boot_seen') %}moss-booted{% endif %}" id="moss-chat" data-boot-id="{{ session.get('moss_boot_id', '') }}" {% if request.args.get('moss') == 'open' %}open{% endif %}>
