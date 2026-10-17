@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Announcements{% endblock %}
+{% block content %}
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">BARANGAY UPDATES</span><h2>All announcements</h2></div><div class="panel-heading-actions"><span class="count-badge">{{ announcements|length }} total</span>{% if user.role in ("admin", "official") %}<button class="button button-small" id="announcement-open" type="button">+ New announcement</button>{% endif %}</div></div>
+    {% if announcements %}
+    <ul class="announcement-feed">
+        {% for post in announcements %}
+        <li class="announcement-card {% if post.is_pinned %}pinned{% endif %}">
+            <div><span class="eyebrow">{{ post.created_at[:16] }}{% if post.author_name %} · {{ post.author_name }}{% endif %}</span><h3>{% if post.is_pinned %}<span class="pin-badge">Pinned</span> {% endif %}{{ post.title }}</h3><p>{{ post.body }}</p></div>
+            {% if user.role in ("admin", "official") %}
+            <div class="announcement-actions">
+                <form method="post" action="{{ url_for('toggle_pin_announcement', announcement_id=post.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="button button-small button-quiet" type="submit">{{ "Unpin" if post.is_pinned else "Pin" }}</button>
+                </form>
+                <form method="post" action="{{ url_for('delete_announcement', announcement_id=post.id) }}" onsubmit="return confirm('Delete this announcement?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="button button-small button-quiet" type="submit">Delete</button>
+                </form>
+            </div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="megaphone"></i></span><strong>No announcements yet</strong><p>Community notices will appear here.</p></div>
+    {% endif %}
+</section>
+{% if user.role in ("admin", "official") %}
+<div class="modal-overlay" id="announcement-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
+        <div class="modal-head">
+            <div><span class="eyebrow">COMMUNITY NOTICE</span><h2 id="announcement-title">New announcement</h2></div>
+            <button class="modal-close" type="button" data-close-modal aria-label="Close"><i data-lucide="x"></i></button>
+        </div>
+        <p class="muted">Notices appear on everyone's dashboard immediately.</p>
+        <form method="post" action="{{ url_for('create_announcement') }}" class="form-stack announcement-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="title">Title</label>
+            <input id="title" name="title" maxlength="150" required placeholder="e.g. Free medical mission on Saturday">
+            <label for="body">Details</label>
+            <textarea id="body" name="body" rows="4" maxlength="2000" required placeholder="What, when, where, and who to contact"></textarea>
+            <label class="check-row"><input type="checkbox" name="is_pinned" value="1"> Pin to top</label>
+            <div class="modal-actions">
+                <button class="button button-quiet" type="button" data-close-modal>Cancel</button>
+                <button class="button button-primary modal-submit" type="submit">Publish</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(() => {
+    const openBtn = document.getElementById("announcement-open");
+    const overlay = document.getElementById("announcement-modal");
+    if (!openBtn || !overlay) return;
+    const firstInput = overlay.querySelector("input[name='title']");
+    const open = () => {
+        overlay.hidden = false;
+        document.body.classList.add("modal-open");
+        if (firstInput) firstInput.focus();
+    };
+    const close = () => {
+        overlay.hidden = true;
+        document.body.classList.remove("modal-open");
+        openBtn.focus();
+    };
+    openBtn.addEventListener("click", open);
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay || event.target.closest("[data-close-modal]")) close();
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !overlay.hidden) close();
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}My profile{% endblock %}
+{% block content %}
+<section class="panel detail-panel profile-single">
+    <div class="panel-heading"><div><span class="eyebrow">ACCOUNT DETAILS</span><h2>Update profile</h2></div><span class="role-badge">{{ user.role|title }}</span></div>
+    <form method="post" action="{{ url_for('update_profile') }}" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="full_name">Full name</label>
+        <input id="full_name" name="full_name" value="{{ user.full_name }}" maxlength="120" required>
+        <div class="field-row">
+            <div><label for="age">Age</label><input id="age" name="age" type="number" min="1" max="120" value="{{ user.age or '' }}"></div>
+            <div><label for="phone">Phone</label><input id="phone" name="phone" value="{{ user.phone }}" maxlength="40" placeholder="09xx xxx xxxx"></div>
+        </div>
+        <label for="purok">Purok / Sitio</label>
+        <input id="purok" name="purok" value="{{ user.purok }}" maxlength="80" placeholder="e.g. Purok 3">
+        <label for="address">Address</label>
+        <input id="address" name="address" value="{{ user.address }}" maxlength="200" placeholder="Street, barangay, city">
+        <button class="button button-primary" type="submit">Save profile</button>
+    </form>
+    <p class="muted">Username: <strong>{{ user.username }}</strong> · Member since {{ user.created_at[:10] }}</p>
+    <p class="muted">Need to update your password? <a href="{{ url_for('change_password') }}">Go to Change password</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Request #{{ "%04d"|format(item.id) }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('requests_page') }}"><i data-lucide="arrow-left" class="inline-icon"></i> Back to {{ "my requests" if user.role == "resident" else "service requests" }}</a></p>
+<div class="detail-grid">
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">REFERENCE #{{ "%04d"|format(item.id) }}</span><h2>{{ item.request_type }}</h2></div><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></div>
+        <dl class="profile-details">
+            <div><dt>Resident</dt><dd>{{ item.resident_name }}</dd></div>
+            <div><dt>Purok</dt><dd>{{ item.resident_purok or "Not provided" }}</dd></div>
+            <div><dt>Phone</dt><dd>{{ item.resident_phone or "Not provided" }}</dd></div>
+            <div><dt>Purpose</dt><dd>{{ item.purpose }}</dd></div>
+            <div><dt>Office note</dt><dd>{{ item.official_note or "—" }}</dd></div>
+            <div><dt>Submitted</dt><dd>{{ item.created_at }}</dd></div>
+            <div><dt>Last update</dt><dd>{{ item.updated_at }}</dd></div>
+        </dl>
+        <div class="detail-actions">
+            <button class="button button-small" type="button" onclick="window.print()"><i data-lucide="printer"></i> Print / certificate preview</button>
+            {% if user.role == "resident" and item.status in ("Pending", "Processing") %}
+            <form method="post" action="{{ url_for('cancel_request', request_id=item.id) }}" onsubmit="return confirm('Cancel this request?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-small button-quiet" type="submit">Cancel request</button>
+            </form>
+            {% endif %}
+            {% if user.role in ("admin", "official") %}
+            <form method="post" action="{{ url_for('delete_request', request_id=item.id) }}" onsubmit="return confirm('Delete this request permanently?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-small button-quiet" type="submit">Delete</button>
+            </form>
+            {% endif %}
+        </div>
+    </section>
+    <div>
+        {% if user.role in ("admin", "official") %}
+        <section class="panel detail-panel">
+            <div class="panel-heading"><div><span class="eyebrow">OFFICE ACTION</span><h2>Update status</h2></div></div>
+            <form method="post" action="{{ url_for('update_request', request_id=item.id) }}" class="form-stack">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="detail">
+                <label for="status">Status</label>
+                <select id="status" name="status">{% for status in statuses %}<option value="{{ status }}" {% if status == item.status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+                <label for="official_note">Office note</label>
+                <input id="official_note" type="text" name="official_note" value="{{ item.official_note }}" maxlength="500" placeholder="e.g. Ready tomorrow after 9am">
+                <button class="button button-primary" type="submit">Save update</button>
+            </form>
+        </section>
+        {% endif %}
+        <section class="panel detail-panel timeline-panel">
+            <div class="panel-heading"><div><span class="eyebrow">TRACKING</span><h2>History</h2></div><span class="count-badge">{{ events|length }} events</span></div>
+            {% if events %}
+            <ol class="timeline">
+                {% for event in events %}
+                <li><strong>{% if event.old_status %}{{ event.old_status }} → {% endif %}{{ event.new_status or "Note" }}</strong><small>{{ event.created_at }}{% if event.actor_name %} · {{ event.actor_name }}{% endif %}</small>{% if event.note %}<p>{{ event.note }}</p>{% endif %}</li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <div class="empty-state"><span class="empty-icon"><i data-lucide="history"></i></span><strong>No history yet</strong><p>Status changes will be recorded here.</p></div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+<section class="panel printable-certificate" id="print-area">
+    <span class="eyebrow">CERTIFICATE PREVIEW — FOR REFERENCE ONLY</span>
+    <h2>{{ item.request_type }}</h2>
+    <p>Reference #{{ "%04d"|format(item.id) }} · {{ item.created_at[:10] }}</p>
+    <p>This certifies that <strong>{{ item.resident_name }}</strong>{% if item.resident_purok %}, of {{ item.resident_purok }}{% endif %}, submitted a request for <strong>{{ item.request_type }}</strong> for the purpose of <strong>{{ item.purpose }}</strong>.</p>
+    <p>Current status: <strong>{{ item.status }}</strong>{% if item.official_note %} — {{ item.official_note }}{% endif %}.</p>
+    <p class="muted">An official signed copy must still be issued by the barangay office. This printout is a tracking reference, not an official certificate.</p>
+    <div class="cert-signatures"><div><span>______________________</span><small>Barangay Official</small></div><div><span>______________________</span><small>Date issued</small></div></div>
+</section>
+{% endblock %}

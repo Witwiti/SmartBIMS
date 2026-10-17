@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}User accounts{% endblock %}
+{% block content %}
+<section class="panel filter-panel">
+    <form method="get" action="{{ url_for('accounts_page') }}" class="filter-form" data-autofilter>
+        <input type="search" name="search" value="{{ search }}" placeholder="Search name or username..." aria-label="Search accounts" autocomplete="off">
+        <select name="role" aria-label="Filter by role">
+            <option value="">All roles</option>
+            <option value="admin" {% if role_filter == "admin" %}selected{% endif %}>Admin</option>
+            <option value="official" {% if role_filter == "official" %}selected{% endif %}>Official</option>
+            <option value="resident" {% if role_filter == "resident" %}selected{% endif %}>Resident</option>
+        </select>
+        {% if search or role_filter %}<a class="button button-small button-quiet" href="{{ url_for('accounts_page') }}">Clear</a>{% endif %}
+    </form>
+</section>
+<section class="panel data-panel accounts-panel">
+    <div class="panel-heading"><div><span class="eyebrow">PORTAL USERS</span><h2>User accounts</h2></div><div class="panel-heading-actions"><span class="count-badge">{{ accounts|length }} total</span><button class="button button-small" id="add-user-open" type="button">+ Add user</button></div></div>
+    <div class="table-wrap"><table>
+        <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>{% for account in accounts %}
+            <tr><td><strong>{{ account.full_name }}</strong></td><td>{{ account.username }}</td><td>{{ account.role|title }}</td><td><span class="status {% if account.active %}status-completed{% else %}status-declined{% endif %}">{{ "Active" if account.active else "Inactive" }}</span></td><td>
+                {% if account.role == "admin" %}<span class="muted">{% if account.id == user.id %}You{% else %}Administrator{% endif %}</span>{% else %}
+                <div class="account-actions">
+                    <form method="post" action="{{ url_for('toggle_account', user_id=account.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-small {% if account.active %}button-quiet{% endif %}" type="submit">{{ "Deactivate" if account.active else "Reactivate" }}</button></form>
+                    <form method="post" action="{{ url_for('reset_password', user_id=account.id) }}" onsubmit="return confirm('Reset password for {{ account.username }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="new_password" value="barangay123">
+                        <button class="button button-small button-quiet" type="submit" title="Reset to barangay123">Reset pw</button>
+                    </form>
+                </div>
+                {% endif %}
+            </td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    <p class="muted table-foot-note">Password reset sets a temporary password: <code>barangay123</code>. Tell the user to change it in My profile.</p>
+</section>
+<div class="modal-overlay" id="add-user-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="add-user-title">
+        <div class="modal-head">
+            <div><span class="eyebrow">ACCESS CONTROL</span><h2 id="add-user-title">Add user</h2></div>
+            <button class="modal-close" type="button" data-close-modal aria-label="Close"><i data-lucide="x"></i></button>
+        </div>
+        <p class="muted">Create an official or resident account. Residents can also register themselves.</p>
+        <form method="post" action="{{ url_for('create_account') }}" class="form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="account_name">Full name</label><input id="account_name" name="full_name" maxlength="120" required>
+            <label for="account_username">Username</label><input id="account_username" name="username" minlength="3" maxlength="40" required>
+            <label for="account_password">Temporary password</label><input id="account_password" name="password" type="password" minlength="8" required>
+            <label for="account_role">Role</label><select id="account_role" name="role" required><option value="official">Barangay official</option><option value="resident">Resident</option></select>
+            <div class="modal-actions">
+                <button class="button button-quiet" type="button" data-close-modal>Cancel</button>
+                <button class="button button-primary modal-submit" type="submit">Create account</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(() => {
+    const openBtn = document.getElementById("add-user-open");
+    const overlay = document.getElementById("add-user-modal");
+    if (!openBtn || !overlay) return;
+    const firstInput = overlay.querySelector("input[name='full_name']");
+    const open = () => {
+        overlay.hidden = false;
+        document.body.classList.add("modal-open");
+        if (firstInput) firstInput.focus();
+    };
+    const close = () => {
+        overlay.hidden = true;
+        document.body.classList.remove("modal-open");
+        openBtn.focus();
+    };
+    openBtn.addEventListener("click", open);
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay || event.target.closest("[data-close-modal]")) close();
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !overlay.hidden) close();
+    });
+})();
+</script>
+{% endblock %}

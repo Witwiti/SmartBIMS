@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+{% if user.role == "resident" %}
+<section class="stats-grid">
+    <article class="stat-card"><span class="stat-icon stat-blue"><i data-lucide="file-text"></i></span><span class="stat-label">My requests</span><strong>{{ counts.my_requests }}</strong><small>All your submissions</small></article>
+    <article class="stat-card"><span class="stat-icon stat-amber"><i data-lucide="clock"></i></span><span class="stat-label">In progress</span><strong>{{ counts.pending }}</strong><small>Pending + processing</small></article>
+    <article class="stat-card"><span class="stat-icon stat-green"><i data-lucide="package-check"></i></span><span class="stat-label">Ready for pickup</span><strong>{{ counts.ready }}</strong><small>Visit the office</small></article>
+</section>
+<div class="dashboard-grid">
+    <section class="panel data-panel">
+        <div class="panel-heading"><div><span class="eyebrow">RECENT ACTIVITY</span><h2>My latest requests</h2></div><a class="button button-small" href="{{ url_for('requests_page') }}">View all</a></div>
+        {% if recent_requests %}
+        <div class="table-wrap"><table>
+            <thead><tr><th>Request</th><th>Status</th><th>Date</th><th></th></tr></thead>
+            <tbody>{% for item in recent_requests %}
+                <tr><td><strong>{{ item.request_type }}</strong><small class="cell-sub">#{{ "%04d"|format(item.id) }} · {{ item.purpose[:60] }}</small></td><td><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></td><td>{{ item.created_at[:10] }}</td><td><a href="{{ url_for('request_detail', request_id=item.id) }}">View</a></td></tr>
+            {% endfor %}</tbody>
+        </table></div>
+        {% else %}
+        <div class="empty-state"><span class="empty-icon"><i data-lucide="file-text"></i></span><strong>No requests yet</strong><p>Submit your first document request below.</p><p><a class="button button-primary" href="{{ url_for('requests_page') }}">Request a document</a></p></div>
+        {% endif %}
+    </section>
+    <section class="panel announcement-preview">
+        <div class="panel-heading"><div><span class="eyebrow">COMMUNITY</span><h2>Announcements</h2></div><a href="{{ url_for('announcements_page') }}">View all</a></div>
+        {% if announcements %}
+        <ul class="announcement-list">
+            {% for post in announcements %}
+            <li>{% if post.is_pinned %}<span class="pin-badge">Pinned</span>{% endif %}<strong>{{ post.title }}</strong><small>{{ post.created_at[:10] }}{% if post.author_name %} · {{ post.author_name }}{% endif %}</small><p>{{ post.body[:140] }}{% if post.body|length > 140 %}…{% endif %}</p></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state"><span class="empty-icon"><i data-lucide="megaphone"></i></span><strong>No announcements</strong><p>Community notices will appear here.</p></div>
+        {% endif %}
+    </section>
+</div>
+<section class="panel profile-panel dashboard-profile">
+    <span class="eyebrow">YOUR PROFILE</span>
+    <h2>Resident details</h2>
+    <dl class="profile-details">
+        <div><dt>Full name</dt><dd>{{ user.full_name }}</dd></div>
+        <div><dt>Username</dt><dd>{{ user.username }}</dd></div>
+        <div><dt>Age</dt><dd>{{ user.age if user.age else "Not provided" }}</dd></div>
+        <div><dt>Phone</dt><dd>{{ user.phone or "Not provided" }}</dd></div>
+        <div><dt>Purok / Sitio</dt><dd>{{ user.purok or "Not provided" }}</dd></div>
+        <div><dt>Address</dt><dd>{{ user.address or "Not provided" }}</dd></div>
+    </dl>
+    <p><a class="button button-small" href="{{ url_for('profile_page') }}">Update profile</a></p>
+</section>
+{% else %}
+<section class="stats-grid stats-grid-4">
+    <article class="stat-card"><span class="stat-icon stat-green"><i data-lucide="users"></i></span><span class="stat-label">Registered residents</span><strong>{{ counts.residents }}</strong><small>Active community accounts</small></article>
+    <article class="stat-card"><span class="stat-icon stat-amber"><i data-lucide="clock"></i></span><span class="stat-label">Pending requests</span><strong>{{ counts.pending }}</strong><small>Awaiting office review</small></article>
+    <article class="stat-card"><span class="stat-icon stat-blue"><i data-lucide="file-text"></i></span><span class="stat-label">Total service requests</span><strong>{{ counts.requests }}</strong><small>All submitted requests</small></article>
+    <article class="stat-card"><span class="stat-icon stat-purple"><i data-lucide="megaphone"></i></span><span class="stat-label">Announcements</span><strong>{{ counts.announcements }}</strong><small>Published notices</small></article>
+</section>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">WORKLOAD</span><h2>Requests by status</h2></div><a href="{{ url_for('reports_page') }}">Full reports</a></div>
+    <div class="status-bars">
+        {% for status, total in status_counts.items() %}
+        <div class="status-bar-row"><span>{{ status }}</span><div class="bar-track"><i style="width: {{ (total / ([counts.requests, 1]|max) * 100)|round(1) }}%"></i></div><strong>{{ total }}</strong></div>
+        {% endfor %}
+    </div>
+</section>
+<div class="dashboard-grid">
+    <section class="panel data-panel">
+        <div class="panel-heading"><div><span class="eyebrow">QUEUE</span><h2>Latest submissions</h2></div><a href="{{ url_for('requests_page') }}">Review all</a></div>
+        {% if recent_requests %}
+        <div class="table-wrap"><table>
+            <thead><tr><th>Resident</th><th>Request</th><th>Status</th><th></th></tr></thead>
+            <tbody>{% for item in recent_requests %}
+                <tr><td><strong>{{ item.resident_name }}</strong><small class="cell-sub">#{{ "%04d"|format(item.id) }}</small></td><td>{{ item.request_type }}</td><td><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></td><td><a href="{{ url_for('request_detail', request_id=item.id) }}">Open</a></td></tr>
+            {% endfor %}</tbody>
+        </table></div>
+        {% else %}
+        <div class="empty-state"><span class="empty-icon"><i data-lucide="file-text"></i></span><strong>No submissions yet</strong><p>New resident requests will appear here.</p></div>
+        {% endif %}
+    </section>
+    <section class="panel announcement-preview">
+        <div class="panel-heading"><div><span class="eyebrow">COMMUNITY</span><h2>Announcements</h2></div><a href="{{ url_for('announcements_page') }}">Manage</a></div>
+        {% if announcements %}
+        <ul class="announcement-list">
+            {% for post in announcements %}
+            <li>{% if post.is_pinned %}<span class="pin-badge">Pinned</span>{% endif %}<strong>{{ post.title }}</strong><small>{{ post.created_at[:10] }}{% if post.author_name %} · {{ post.author_name }}{% endif %}</small><p>{{ post.body[:140] }}{% if post.body|length > 140 %}…{% endif %}</p></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state"><span class="empty-icon"><i data-lucide="megaphone"></i></span><strong>No announcements</strong><p><a href="{{ url_for('announcements_page') }}">Publish the first notice</a></p></div>
+        {% endif %}
+    </section>
+</div>
+<section class="quick-links-grid">
+    <a class="panel quick-link-card" href="{{ url_for('requests_page') }}"><span class="panel-icon"><i data-lucide="file-text"></i></span><span><strong>Service requests</strong><small>Review submissions and update request statuses.</small></span><span class="quick-arrow"><i data-lucide="arrow-right"></i></span></a>
+    <a class="panel quick-link-card" href="{{ url_for('residents_page') }}"><span class="panel-icon"><i data-lucide="users"></i></span><span><strong>Residents</strong><small>Browse the barangay resident directory.</small></span><span class="quick-arrow"><i data-lucide="arrow-right"></i></span></a>
+    <a class="panel quick-link-card" href="{{ url_for('announcements_page') }}"><span class="panel-icon"><i data-lucide="megaphone"></i></span><span><strong>Announcements</strong><small>Publish community notices and updates.</small></span><span class="quick-arrow"><i data-lucide="arrow-right"></i></span></a>
+    <a class="panel quick-link-card" href="{{ url_for('reports_page') }}"><span class="panel-icon"><i data-lucide="chart-column"></i></span><span><strong>Reports</strong><small>Workload, trends, and purok breakdowns.</small></span><span class="quick-arrow"><i data-lucide="arrow-right"></i></span></a>
+    {% if user.role == "admin" %}
+    <a class="panel quick-link-card" href="{{ url_for('accounts_page') }}"><span class="panel-icon"><i data-lucide="settings"></i></span><span><strong>User accounts</strong><small>Create or manage resident and official accounts.</small></span><span class="quick-arrow"><i data-lucide="arrow-right"></i></span></a>
+    <a class="panel quick-link-card" href="{{ url_for('activity_page') }}"><span class="panel-icon"><i data-lucide="history"></i></span><span><strong>Activity log</strong><small>Audit recent portal actions.</small></span><span class="quick-arrow"><i data-lucide="arrow-right"></i></span></a>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

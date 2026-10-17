@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block content %}
+<section class="panel filter-panel">
+    <form method="get" action="{{ url_for('activity_page') }}" class="filter-form" data-autofilter>
+        <input type="search" name="search" value="{{ search }}" placeholder="Search action, details, actor..." aria-label="Search activity" autocomplete="off">
+        {% if search %}<a class="button button-small button-quiet" href="{{ url_for('activity_page') }}">Clear</a>{% endif %}
+    </form>
+</section>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">AUDIT TRAIL</span><h2>Recent actions ({{ entries|length }})</h2></div><span class="count-badge">Last 100</span></div>
+    {% if entries %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
+        <tbody>{% for entry in entries %}
+            <tr><td>{{ entry.created_at }}</td><td><strong>{{ entry.actor_name or "System" }}</strong><small class="cell-sub">{{ entry.actor_username or "" }}</small></td><td><span class="status">{{ entry.action }}</span></td><td class="purpose-cell">{{ entry.details or "—" }}</td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="history"></i></span><strong>No activity yet</strong><p>Portal actions will be logged here.</p></div>
+    {% endif %}
+</section>
+{% endblock %}

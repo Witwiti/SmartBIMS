@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Developers{% endblock %}
+{% block content %}
+<section class="dev-card">
+    <div class="dev-card-head">
+        <div><h2>Developers info</h2><p>Who built this system, and what it is for.</p></div>
+    </div>
+
+    <div class="dev-profile">
+        <img class="dev-photo" src="{{ url_for('static', filename='dev-francis.jpg') }}" alt="Photo of Francis Joven H. Villarin" onerror="this.style.display='none';document.getElementById('dev-francis-fallback').style.display='grid';">
+        <span class="dev-photo dev-photo-fallback" id="dev-francis-fallback" style="display:none">FV</span>
+        <strong class="dev-name">Francis Joven H. Villarin</strong>
+    </div>
+
+    <div class="dev-meta">
+        <span class="dev-icon"><i data-lucide="graduation-cap"></i></span>
+        <div><small>Student</small><strong>Studies at</strong><span>Christ the King College de Maranding Inc.</span></div>
+    </div>
+
+    <div class="dev-meta">
+        <span class="dev-icon"><i data-lucide="mail"></i></span>
+        <div><small>Email</small><a href="mailto:francisvillarin@ckcm.edu.ph">francisvillarin@ckcm.edu.ph</a><a href="mailto:francisjovenvillarin@gmail.com">francisjovenvillarin@gmail.com</a></div>
+    </div>
+
+    <div class="dev-meta">
+        <span class="dev-icon"><i data-lucide="globe"></i></span>
+        <div><a href="https://www.facebook.com/share/14ueLHB7qNr/" target="_blank" rel="noopener">facebook.com/francisvillarin</a><a href="https://instagram.com/frncois.lvl9999999" target="_blank" rel="noopener">instagram.com/frncois.lvl9999999</a></div>
+    </div>
+
+    <hr class="dev-divider">
+
+    <div class="dev-about">
+        <h3>About the system</h3>
+        <strong>Barangay Information Management System</strong>
+        <p class="dev-tagline">Request Easily. Track Clearly. Serve Faster.</p>
+        <p>Barangay halls still run on paper logbooks and long queues. Residents take time off just to request a clearance or follow up on a certificate, while staff re-encode the same details by hand and dig through records when reports are due.</p>
+        <p>This system was built to fix that. Residents create an account, submit document requests online, and follow each request from Pending to Ready for pickup. Barangay officials review submissions, update statuses with office notes, keep the resident directory in order, and publish announcements in one place. Administrators manage accounts, read service reports, and audit activity, while Moss, the built-in assistant, walks residents through every request.</p>
+        <p>It is a service aid, not a replacement for the barangay office. Final approval and issuance of every certificate remain with authorized officials.</p>
+    </div>
+</section>
+{% endblock %}
+~

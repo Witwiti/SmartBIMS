@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#123b35">
+    <title>{% if page == "login" %}Sign in{% elif page == "register" %}Create account{% else %}{{ code }} error{% endif %} · Barangay Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% if page == "login" or page == "register" %}
+    <main class="auth-layout">
+        <section class="welcome-panel">
+            <a class="brand brand-light" href="{{ url_for('home') }}">
+                <span class="brand-mark" aria-hidden="true">B</span>
+                <span>Barangay Portal<small>Information &amp; services</small></span>
+            </a>
+            <div class="welcome-copy">
+                <span class="eyebrow">YOUR COMMUNITY, CONNECTED</span>
+                <h1>Local services,<br>made simpler.</h1>
+                <p>Request barangay documents, follow their progress, and stay connected with your community office.</p>
+            </div>
+            <p class="welcome-foot">A digital service of your barangay</p>
+        </section>
+        <section class="auth-main">
+            <div class="auth-card">
+                <a class="brand brand-dark mobile-brand" href="{{ url_for('home') }}">
+                    <span class="brand-mark" aria-hidden="true">B</span>
+                    <span>Barangay Portal<small>Information &amp; services</small></span>
+                </a>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% for category, message in messages %}
+                    <div class="notice notice-{{ category }}" role="status">{{ message }}</div>
+                    {% endfor %}
+                {% endwith %}
+                {% if page == "login" %}
+                <span class="eyebrow">WELCOME BACK</span>
+                <h2>Sign in to your account</h2>
+                <p class="muted">Use your account to access barangay services.</p>
+                <form method="post" action="{{ url_for('login') }}" class="form-stack">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label for="username">Username</label>
+                    <input id="username" name="username" type="text" autocomplete="username" required minlength="3" maxlength="40" autofocus>
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required>
+                    <button class="button button-primary button-wide" type="submit">Sign in <span aria-hidden="true"><i data-lucide="arrow-right"></i></span></button>
+                </form>
+                <p class="auth-switch">New to the portal? <a href="{{ url_for('register') }}">Create a resident account</a></p>
+                <p class="setup-hint">Barangay staff? Ask your system administrator for an account.</p>
+                {% else %}
+                <span class="eyebrow">RESIDENT REGISTRATION</span>
+                <h2>Create your account</h2>
+                <p class="muted">Register as a resident to request documents and check their status.</p>
+                <form method="post" action="{{ url_for('register') }}" class="form-stack">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label for="full_name">Full name</label>
+                    <input id="full_name" name="full_name" type="text" autocomplete="name" maxlength="120" required>
+                    <div class="field-row">
+                        <div>
+                            <label for="username">Username</label>
+                            <input id="username" name="username" type="text" autocomplete="username" minlength="3" maxlength="40" required>
+                        </div>
+                        <div>
+                            <label for="age">Age <span class="optional">(optional)</span></label>
+                            <input id="age" name="age" type="number" min="1" max="120">
+                        </div>
+                    </div>
+                    <label for="password">Password <span class="optional">(at least 8 characters)</span></label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                    <div class="field-row">
+                        <div>
+                            <label for="phone">Phone <span class="optional">(optional)</span></label>
+                            <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40">
+                        </div>
+                        <div>
+                            <label for="purok">Purok / Sitio</label>
+                            <input id="purok" name="purok" type="text" maxlength="80">
+                        </div>
+                    </div>
+                    <label for="address">Address <span class="optional">(optional)</span></label>
+                    <input id="address" name="address" type="text" autocomplete="street-address" maxlength="200">
+                    <button class="button button-primary button-wide" type="submit">Create resident account <span aria-hidden="true"><i data-lucide="arrow-right"></i></span></button>
+                </form>
+                <p class="auth-switch">Already registered? <a href="{{ url_for('login') }}">Sign in</a></p>
+                {% endif %}
+            </div>
+            <footer class="page-foot">Barangay Information Management System</footer>
+        </section>
+    </main>
+    {% else %}
+    <main class="error-page">
+        <a class="brand brand-dark" href="{{ url_for('home') }}"><span class="brand-mark">B</span><span>Barangay Portal<small>Information &amp; services</small></span></a>
+        <div>
+            <span class="eyebrow">ERROR {{ code }}</span>
+            <h1>{% if code == 403 %}This area is restricted.{% elif code == 400 %}That request could not be processed.{% else %}We couldn't find that page.{% endif %}</h1>
+            <p class="muted">{% if code == 403 %}Your account doesn't have permission to view this page.{% elif code == 400 %}Please check your input and try again.{% else %}The page may have moved or the link may be incorrect.{% endif %}</p>
+            <a class="button button-primary" href="{{ url_for('dashboard') }}">Back to dashboard</a>
+        </div>
+    </main>
+    {% endif %}
+    <script src="{{ url_for('static', filename='lucide.min.js') }}"></script>
+    <script>
+        if (window.lucide) lucide.createIcons();
+    </script>
+</body>
+</html>

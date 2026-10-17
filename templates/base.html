@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#123b35">
+    <title>{% block title %}{{ page_title }}{% endblock %} · Barangay Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <a class="brand brand-light" href="{{ url_for('dashboard') }}">
+                <span class="brand-mark" aria-hidden="true">B</span>
+                <span>Barangay Portal<small>Information &amp; services</small></span>
+            </a>
+            <div class="sidebar-label">WORKSPACE</div>
+            <a class="side-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Overview</a>
+            <a class="side-link {% if active_page == 'requests' %}active{% endif %}" href="{{ url_for('requests_page') }}"><span class="nav-icon"><i data-lucide="file-text"></i></span> {{ "My requests" if user.role == "resident" else "Service requests" }}</a>
+            <a class="side-link {% if active_page == 'announcements' %}active{% endif %}" href="{{ url_for('announcements_page') }}"><span class="nav-icon"><i data-lucide="megaphone"></i></span> Announcements</a>
+            {% if user.role in ("admin", "official") %}
+            <a class="side-link {% if active_page == 'residents' %}active{% endif %}" href="{{ url_for('residents_page') }}"><span class="nav-icon"><i data-lucide="users"></i></span> Residents</a>
+            <a class="side-link {% if active_page == 'reports' %}active{% endif %}" href="{{ url_for('reports_page') }}"><span class="nav-icon"><i data-lucide="chart-column"></i></span> Reports</a>
+            {% endif %}
+            {% if user.role == "admin" %}
+            <a class="side-link {% if active_page == 'accounts' %}active{% endif %}" href="{{ url_for('accounts_page') }}"><span class="nav-icon"><i data-lucide="settings"></i></span> User accounts</a>
+            <a class="side-link {% if active_page == 'activity' %}active{% endif %}" href="{{ url_for('activity_page') }}"><span class="nav-icon"><i data-lucide="history"></i></span> Activity log</a>
+            {% endif %}
+            <div class="sidebar-bottom">
+                <div class="sidebar-help">
+                    <span class="help-icon"><i data-lucide="info"></i></span>
+                    <div><strong>Need assistance?</strong><small>Visit the barangay office.</small></div>
+                </div>
+            </div>
+        </aside>
+        <main class="main-area">
+            <header class="topbar">
+                <div class="breadcrumb">Workspace <span>/</span> <strong>{{ page_title }}</strong></div>
+                <div class="profile-menu">
+                    <div class="profile-copy"><strong>{{ user.full_name }}</strong><span>{{ user.role|replace('_', ' ')|title }}</span></div>
+                    <button class="avatar-button" id="profile-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="profile-menu-dropdown" title="Account options">
+                        <span class="avatar">{{ user.full_name[:1]|upper }}</span>
+                        <span class="avatar-caret" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+                    </button>
+                    <div class="profile-dropdown" id="profile-menu-dropdown" role="menu" hidden>
+                        <div class="profile-dropdown-head"><strong>{{ user.full_name }}</strong><span>{{ user.role|replace('_', ' ')|title }}</span></div>
+                        <a class="profile-dropdown-link" href="{{ url_for('profile_page') }}" role="menuitem"><span class="nav-icon"><i data-lucide="circle-user-round"></i></span> Profile</a>
+                        <a class="profile-dropdown-link" href="{{ url_for('change_password') }}" role="menuitem"><span class="nav-icon"><i data-lucide="key-round"></i></span> Change password</a>
+                        <a class="profile-dropdown-link" href="{{ url_for('developers_page') }}" role="menuitem"><span class="nav-icon"><i data-lucide="code"></i></span> Developers info</a>
+                        <form class="profile-dropdown-logout" method="post" action="{{ url_for('logout') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="profile-dropdown-link logout-link" type="submit" role="menuitem"><span class="nav-icon"><i data-lucide="log-out"></i></span> Log out</button>
+                        </form>
+                    </div>
+                </div>
+            </header>
+            <div class="content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% for category, message in messages %}
+                    <div class="notice notice-{{ category }}" role="status">{{ message }}</div>
+                    {% endfor %}
+                {% endwith %}
+                <section class="page-heading">
+                    <div>
+                        <span class="eyebrow">{{ today }}</span>
+                        <h1>{{ page_title }}</h1>
+                        <p>{{ page_description }}</p>
+                    </div>
+                    <span class="role-badge">{{ user.role|replace('_', ' ')|title }} access</span>
+                </section>
+                {% block content %}{% endblock %}
+                <footer class="content-foot">Barangay Information Management System <span>·</span> For official community services</footer>
+            </div>
+        </main>
+    </div>
+    <details class="moss-widget {% if session.get('moss_boot_seen') %}moss-booted{% endif %}" id="moss-chat" data-boot-id="{{ session.get('moss_boot_id', '') }}" {% if request.args.get('moss') == 'open' %}open{% endif %}>
+        <summary class="moss-launcher" aria-label="Open Moss Virtual Assistant">
+            <img class="moss-launcher-image" src="{{ url_for('static', filename='moss-robot.png') }}" alt="" aria-hidden="true">
+            <span class="moss-notification" aria-hidden="true"></span>
+        </summary>
+        <section class="moss-window" aria-label="Moss Virtual Assistant chat">
+            <div class="moss-boot-screen" aria-hidden="true">
+                <div class="moss-robot moss-robot-large">
+                    <span class="moss-robot-antenna"></span>
+                    <span class="moss-robot-ear moss-robot-ear-left"></span>
+                    <span class="moss-robot-ear moss-robot-ear-right"></span>
+                    <span class="moss-robot-head">
+                        <i class="moss-robot-eye"></i><i class="moss-robot-eye"></i>
+                        <b class="moss-robot-mouth"></b>
+                    </span>
+                    <span class="moss-robot-body"><i></i></span>
+                </div>
+                <strong>Waking up Moss...</strong>
+                <span class="moss-boot-caption">Getting your barangay assistant ready</span>
+                <span class="moss-boot-track"><i></i></span>
+            </div>
+            <header class="moss-header">
+                <div class="moss-robot">
+                    <span class="moss-robot-antenna"></span>
+                    <span class="moss-robot-ear moss-robot-ear-left"></span>
+                    <span class="moss-robot-ear moss-robot-ear-right"></span>
+                    <span class="moss-robot-head">
+                        <i class="moss-robot-eye"></i><i class="moss-robot-eye"></i>
+                        <b class="moss-robot-mouth"></b>
+                    </span>
+                    <span class="moss-robot-body"><i></i></span>
+                </div>
+                <div class="moss-title"><strong>Moss</strong><span class="moss-boot-status"><i></i><span class="moss-boot-label">Powering up...</span><span class="moss-ready-label">Virtual assistant · Online</span></span></div>
+            </header>
+            <p class="moss-intro">Ask me about services, or say “I need a barangay clearance for work.” I’ll ask your permission before submitting a request.</p>
+            <div class="moss-messages" aria-live="polite">
+                {% if assistant_messages %}
+                    {% for message in assistant_messages %}
+                    <div class="moss-message {% if message.speaker != 'Moss' %}moss-message-user{% endif %}">
+                        {% if message.speaker == 'Moss' %}<span class="moss-message-avatar">M</span>{% endif %}
+                        <p><small>{{ message.speaker }}</small>{{ message.text }}</p>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="moss-message">
+                        <span class="moss-message-avatar">M</span>
+                        <p><small>Moss</small>Hi {{ user.full_name.split(' ')[0] }}! I’m Moss, your barangay virtual assistant. How can I help you today?</p>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="moss-prompts">
+                {% if moss_suggestions %}
+                    {% for suggestion in moss_suggestions %}
+                    <form method="post" action="{{ url_for('assistant') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="return_to" value="{{ request.path }}">
+                        <input type="hidden" name="message" value="{{ suggestion }}">
+                        <button type="submit">{{ suggestion }}</button>
+                    </form>
+                    {% endfor %}
+                {% else %}
+                    <a href="{{ url_for('requests_page') }}">Open {{ "my requests" if user.role == "resident" else "service requests" }}</a>
+                    <a href="{{ url_for('announcements_page') }}">Announcements</a>
+                    {% if user.role in ("admin", "official") %}<a href="{{ url_for('residents_page') }}">Open residents</a>{% endif %}
+                {% endif %}
+            </div>
+            <div class="moss-actions">
+                {% if assistant_messages %}
+                <form method="post" action="{{ url_for('assistant_clear') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="return_to" value="{{ request.path }}">
+                    <button type="submit">Clear chat</button>
+                </form>
+                {% endif %}
+            </div>
+            <form class="moss-form" method="post" action="{{ url_for('assistant') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="return_to" value="{{ request.path }}">
+                <label class="visually-hidden" for="moss-message">Message Moss</label>
+                <input id="moss-message" name="message" type="text" maxlength="300" placeholder="Message Moss..." autocomplete="off" required>
+                <button type="submit" aria-label="Send message"><i data-lucide="arrow-up"></i></button>
+            </form>
+            <p class="moss-disclaimer">Moss replies locally. For official advice, contact your barangay office.</p>
+        </section>
+    </details>
+    <script src="{{ url_for('static', filename='lucide.min.js') }}"></script>
+    <script>
+        (() => {
+            if (window.lucide) lucide.createIcons();
+        })();
+        (() => {
+            const button = document.getElementById("profile-menu-button");
+            const menu = document.getElementById("profile-menu-dropdown");
+            if (!button || !menu) return;
+            const close = () => {
+                menu.hidden = true;
+                button.setAttribute("aria-expanded", "false");
+            };
+            const open = () => {
+                menu.hidden = false;
+                button.setAttribute("aria-expanded", "true");
+            };
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (menu.hidden) open();
+                else close();
+            });
+            document.addEventListener("click", (event) => {
+                if (!menu.hidden && !menu.contains(event.target)) close();
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") close();
+            });
+        })();
+        (() => {
+            document.querySelectorAll("form[data-autofilter]").forEach((form) => {
+                const search = form.querySelector("input[type='search']");
+                let timer = null;
+                form.querySelectorAll("select").forEach((select) => {
+                    select.addEventListener("change", () => form.submit());
+                });
+                if (search) {
+                    search.addEventListener("input", () => {
+                        clearTimeout(timer);
+                        timer = setTimeout(() => form.submit(), 450);
+                    });
+                }
+            });
+        })();
+        (() => {
+            const widget = document.getElementById("moss-chat");
+            if (!widget || !widget.dataset.bootId) return;
+
+            const storageKey = `moss-boot-${widget.dataset.bootId}`;
+            const startBoot = () => {
+                if (widget.classList.contains("moss-booted")) return;
+                if (sessionStorage.getItem(storageKey)) {
+                    widget.classList.add("moss-booted");
+                    return;
+                }
+                sessionStorage.setItem(storageKey, "1");
+                widget.classList.add("moss-booting");
+            };
+
+            widget.addEventListener("toggle", () => {
+                if (widget.open) startBoot();
+            });
+            widget.querySelector(".moss-boot-screen").addEventListener("animationend", () => {
+                widget.classList.remove("moss-booting");
+                widget.classList.add("moss-booted");
+            });
+            if (widget.open) startBoot();
+        })();
+    </script>
+</body>
+</html>

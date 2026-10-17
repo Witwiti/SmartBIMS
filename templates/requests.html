@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ "My requests" if user.role == "resident" else "Service requests" }}{% endblock %}
+{% block content %}
+<section class="panel filter-panel">
+    <form method="get" action="{{ url_for('requests_page') }}" class="filter-form" data-autofilter>
+        <input type="search" name="search" value="{{ search }}" placeholder="Search {{ 'type, purpose' if user.role == 'resident' else 'resident, type, purpose' }}..." aria-label="Search requests" autocomplete="off">
+        <select name="status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            {% for status in statuses %}<option value="{{ status }}" {% if status == status_filter %}selected{% endif %}>{{ status }}</option>{% endfor %}
+        </select>
+        <select name="type" aria-label="Filter by type">
+            <option value="">All types</option>
+            {% for item in request_types %}<option value="{{ item }}" {% if item == type_filter %}selected{% endif %}>{{ item }}</option>{% endfor %}
+        </select>
+        {% if search or status_filter or type_filter %}<a class="button button-small button-quiet" href="{{ url_for('requests_page') }}">Clear</a>{% endif %}
+        {% if user.role in ("admin", "official") %}<a class="button button-small button-quiet" href="{{ url_for('export_requests') }}">Export CSV</a>{% endif %}
+    </form>
+</section>
+{% if user.role == "resident" %}
+<section class="panel request-panel request-page-form">
+    <div class="panel-heading">
+        <div><span class="eyebrow">NEW SERVICE</span><h2>Request a document</h2></div>
+        <span class="panel-icon"><i data-lucide="plus"></i></span>
+    </div>
+    <p class="muted">Choose a service and tell us what you need it for. The office will update your request here.</p>
+    <form method="post" action="{{ url_for('create_request') }}" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="request_type">Document or service</label>
+        <select id="request_type" name="request_type" required>
+            <option value="">Select a service</option>
+            {% for item in request_types %}<option value="{{ item }}">{{ item }}</option>{% endfor %}
+        </select>
+        <label for="purpose">Purpose</label>
+        <textarea id="purpose" name="purpose" rows="3" maxlength="500" placeholder="Briefly describe why you need this document" required></textarea>
+        <button class="button button-primary" type="submit">Submit request <span aria-hidden="true"><i data-lucide="arrow-right"></i></span></button>
+    </form>
+</section>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">SERVICE HISTORY</span><h2>My requests</h2></div><span class="count-badge">{{ requests_list|length }} total</span></div>
+    {% if requests_list %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Request</th><th>Purpose</th><th>Date submitted</th><th>Status</th><th>Office note</th><th></th></tr></thead>
+        <tbody>{% for item in requests_list %}
+            <tr><td><strong>{{ item.request_type }}</strong><small class="cell-sub">Reference #{{ "%04d"|format(item.id) }}</small></td><td class="purpose-cell">{{ item.purpose }}</td><td>{{ item.created_at[:10] }}</td><td><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></td><td>{{ item.official_note or "—" }}</td><td><a href="{{ url_for('request_detail', request_id=item.id) }}">View</a></td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="file-text"></i></span><strong>No requests found</strong><p>Try a different search or submit a new request above.</p></div>
+    {% endif %}
+</section>
+{% else %}
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">COMMUNITY SERVICES</span><h2>All service requests</h2></div><span class="count-badge">{{ requests_list|length }} total</span></div>
+    {% if requests_list %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Resident</th><th>Request</th><th>Submitted</th><th>Status</th><th>Update request</th><th></th></tr></thead>
+        <tbody>{% for item in requests_list %}
+            <tr>
+                <td><strong>{{ item.resident_name }}</strong><small class="cell-sub">{{ item.resident_purok or "Purok not provided" }} · #{{ "%04d"|format(item.id) }}</small></td>
+                <td><strong>{{ item.request_type }}</strong><small class="cell-sub">{{ item.purpose }}</small></td>
+                <td>{{ item.created_at[:10] }}</td>
+                <td><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></td>
+                <td><form class="inline-form" method="post" action="{{ url_for('update_request', request_id=item.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select aria-label="Status for request {{ item.id }}" name="status">{% for status in statuses %}<option value="{{ status }}" {% if status == item.status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+                    <input type="text" name="official_note" value="{{ item.official_note }}" maxlength="500" aria-label="Office note for request {{ item.id }}" placeholder="Office note">
+                    <button class="button button-small" type="submit">Save</button>
+                </form></td>
+                <td><a href="{{ url_for('request_detail', request_id=item.id) }}">Open</a></td>
+            </tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="file-text"></i></span><strong>No service requests</strong><p>No results match the current filters.</p></div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

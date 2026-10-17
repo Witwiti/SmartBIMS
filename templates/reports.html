@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<section class="stats-grid stats-grid-4">
+    <article class="stat-card"><span class="stat-icon stat-green"><i data-lucide="users"></i></span><span class="stat-label">Active residents</span><strong>{{ total_residents }}</strong><small>Community accounts</small></article>
+    <article class="stat-card"><span class="stat-icon stat-blue"><i data-lucide="file-text"></i></span><span class="stat-label">Total requests</span><strong>{{ total_requests }}</strong><small>All time</small></article>
+    <article class="stat-card"><span class="stat-icon stat-amber"><i data-lucide="clock"></i></span><span class="stat-label">Pending</span><strong>{{ by_status.get("Pending", 0) }}</strong><small>Needs review</small></article>
+    <article class="stat-card"><span class="stat-icon stat-purple"><i data-lucide="circle-check"></i></span><span class="stat-label">Completed</span><strong>{{ by_status.get("Completed", 0) }}</strong><small>Finished</small></article>
+</section>
+<div class="detail-grid">
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">WORKLOAD</span><h2>By status</h2></div></div>
+        <div class="status-bars">
+            {% for status, total in by_status.items() %}
+            <div class="status-bar-row"><span>{{ status }}</span><div class="bar-track"><i style="width: {{ (total / ([total_requests, 1]|max) * 100)|round(1) }}%"></i></div><strong>{{ total }}</strong></div>
+            {% endfor %}
+        </div>
+    </section>
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">SERVICES</span><h2>By document type</h2></div></div>
+        {% if by_type %}
+        <div class="status-bars">
+            {% for row in by_type %}
+            <div class="status-bar-row"><span>{{ row.request_type }}</span><div class="bar-track bar-green"><i style="width: {{ (row.total / ([total_requests, 1]|max) * 100)|round(1) }}%"></i></div><strong>{{ row.total }}</strong></div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><strong>No data yet</strong></div>
+        {% endif %}
+    </section>
+</div>
+<div class="detail-grid">
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">COMMUNITY</span><h2>Top puroks</h2></div></div>
+        {% if by_purok %}
+        <div class="status-bars">
+            {% for row in by_purok %}
+            <div class="status-bar-row"><span>{{ row.purok }}</span><div class="bar-track bar-amber"><i style="width: {{ (row.total / ([max_purok, 1]|max) * 100)|round(1) }}%"></i></div><strong>{{ row.total }}</strong></div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><strong>No purok data</strong></div>
+        {% endif %}
+    </section>
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">TREND</span><h2>Last 6 months</h2></div><a href="{{ url_for('export_requests') }}">Export CSV</a></div>
+        {% if monthly %}
+        <div class="month-chart">
+            {% for row in monthly %}
+            <div class="month-bar"><span class="month-value">{{ row.total }}</span><i style="height: {{ ((row.total / ([monthly|map(attribute='total')|max, 1]|max)) * 90)|round(1) }}px"></i><small>{{ row.month[5:] }}</small></div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><strong>No trend yet</strong></div>
+        {% endif %}
+    </section>
+</div>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">RECENT QUEUE</span><h2>Latest requests</h2></div><a href="{{ url_for('requests_page') }}">Open requests</a></div>
+    {% if recent %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Ref</th><th>Resident</th><th>Type</th><th>Status</th><th>Date</th><th></th></tr></thead>
+        <tbody>{% for item in recent %}
+            <tr><td>#{{ "%04d"|format(item.id) }}</td><td><strong>{{ item.resident_name }}</strong></td><td>{{ item.request_type }}</td><td><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></td><td>{{ item.created_at[:10] }}</td><td><a href="{{ url_for('request_detail', request_id=item.id) }}">Open</a></td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><strong>No requests yet</strong></div>
+    {% endif %}
+</section>
+{% endblock %}

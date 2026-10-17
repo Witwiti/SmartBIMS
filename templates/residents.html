@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Residents{% endblock %}
+{% block content %}
+<section class="panel filter-panel">
+    <form method="get" action="{{ url_for('residents_page') }}" class="filter-form" data-autofilter>
+        <input type="search" name="search" value="{{ search }}" placeholder="Search name, username, address..." aria-label="Search residents" autocomplete="off">
+        <select name="purok" aria-label="Filter by purok">
+            <option value="">All puroks</option>
+            {% for purok in puroks %}<option value="{{ purok }}" {% if purok == purok_filter %}selected{% endif %}>{{ purok }}</option>{% endfor %}
+        </select>
+        <select name="account" aria-label="Filter by account status">
+            <option value="">Active + inactive</option>
+            <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active only</option>
+            <option value="inactive" {% if status_filter == "inactive" %}selected{% endif %}>Inactive only</option>
+        </select>
+        {% if search or purok_filter or status_filter %}<a class="button button-small button-quiet" href="{{ url_for('residents_page') }}">Clear</a>{% endif %}
+        <a class="button button-small button-quiet" href="{{ url_for('export_residents') }}">Export CSV</a>
+    </form>
+</section>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">COMMUNITY DIRECTORY</span><h2>Registered residents</h2></div><span class="count-badge">{{ residents|length }} residents</span></div>
+    {% if residents %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Resident</th><th>Username</th><th>Age</th><th>Phone</th><th>Purok / Sitio</th><th>Account</th><th></th></tr></thead>
+        <tbody>{% for resident in residents %}
+            <tr><td><strong>{{ resident.full_name }}</strong><small class="cell-sub">{{ resident.address or "Address not provided" }}</small></td><td>{{ resident.username }}</td><td>{{ resident.age or "—" }}</td><td>{{ resident.phone or "—" }}</td><td>{{ resident.purok or "—" }}</td><td><span class="status {% if resident.active %}status-completed{% else %}status-declined{% endif %}">{{ "Active" if resident.active else "Inactive" }}</span></td><td><a href="{{ url_for('resident_detail', resident_id=resident.id) }}">Open</a></td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="users"></i></span><strong>No residents found</strong><p>Try different filters. Residents can register from the sign-in page.</p></div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ resident.full_name }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('residents_page') }}"><i data-lucide="arrow-left" class="inline-icon"></i> Back to residents</a></p>
+<div class="detail-grid">
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">RESIDENT PROFILE</span><h2>{{ resident.full_name }}</h2></div><span class="status {% if resident.active %}status-completed{% else %}status-declined{% endif %}">{{ "Active" if resident.active else "Inactive" }}</span></div>
+        <dl class="profile-details">
+            <div><dt>Username</dt><dd>{{ resident.username }}</dd></div>
+            <div><dt>Age</dt><dd>{{ resident.age or "Not provided" }}</dd></div>
+            <div><dt>Phone</dt><dd>{{ resident.phone or "Not provided" }}</dd></div>
+            <div><dt>Purok</dt><dd>{{ resident.purok or "Not provided" }}</dd></div>
+            <div><dt>Address</dt><dd>{{ resident.address or "Not provided" }}</dd></div>
+            <div><dt>Member since</dt><dd>{{ resident.created_at }}</dd></div>
+        </dl>
+    </section>
+    <section class="panel detail-panel">
+        <div class="panel-heading"><div><span class="eyebrow">STAFF EDIT</span><h2>Update details</h2></div></div>
+        <form method="post" action="{{ url_for('update_resident', resident_id=resident.id) }}" class="form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="full_name">Full name</label>
+            <input id="full_name" name="full_name" value="{{ resident.full_name }}" maxlength="120" required>
+            <div class="field-row">
+                <div><label for="age">Age</label><input id="age" name="age" type="number" min="1" max="120" value="{{ resident.age or '' }}"></div>
+                <div><label for="phone">Phone</label><input id="phone" name="phone" value="{{ resident.phone }}" maxlength="40"></div>
+            </div>
+            <label for="purok">Purok / Sitio</label>
+            <input id="purok" name="purok" value="{{ resident.purok }}" maxlength="80">
+            <label for="address">Address</label>
+            <input id="address" name="address" value="{{ resident.address }}" maxlength="200">
+            <button class="button button-primary" type="submit">Save changes</button>
+        </form>
+    </section>
+</div>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">SERVICE HISTORY</span><h2>Recent requests ({{ resident_requests|length }})</h2></div></div>
+    {% if resident_requests %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Ref</th><th>Type</th><th>Purpose</th><th>Status</th><th>Date</th><th></th></tr></thead>
+        <tbody>{% for item in resident_requests %}
+            <tr><td>#{{ "%04d"|format(item.id) }}</td><td><strong>{{ item.request_type }}</strong></td><td class="purpose-cell">{{ item.purpose }}</td><td><span class="status status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span></td><td>{{ item.created_at[:10] }}</td><td><a href="{{ url_for('request_detail', request_id=item.id) }}">Open</a></td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="file-text"></i></span><strong>No requests yet</strong><p>This resident has not submitted any requests.</p></div>
+    {% endif %}
+</section>
+{% endblock %}
