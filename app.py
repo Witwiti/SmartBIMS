@@ -307,7 +307,11 @@ def navigation_context():
         elif pending.get("stage") == "confirm":
             moss_suggestions = ["Yes, submit it", "Cancel request"]
     elif session.get("user_role") == "resident":
-        moss_suggestions = ["I need a certificate"]
+        user_for_suggestions = current_user()
+        if user_for_suggestions and not profile_is_complete(user_for_suggestions):
+            moss_suggestions = ["Complete my profile"]
+        else:
+            moss_suggestions = ["I need a certificate"]
     return {
         "page_title": page_title,
         "page_description": page_description,
@@ -1554,6 +1558,9 @@ def assistant():
     if not message or len(message) > 300:
         flash("Enter a message of up to 300 characters.", "error")
         return redirect(return_to + "?moss=open#moss-chat")
+
+    if message.strip().lower() == "complete my profile":
+        return redirect(url_for("profile_page") + "?moss=open#moss-chat")
 
     reply = assistant_request_action(message, user)
     append_assistant_exchange(
