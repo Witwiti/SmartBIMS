@@ -153,6 +153,8 @@ def init_db():
         # Lightweight migration for databases created before these tables existed.
         for stmt in (
             "ALTER TABLE service_requests ADD COLUMN pickup_note TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN birthday TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN sex TEXT NOT NULL DEFAULT ''",
         ):
             try:
                 db.execute(stmt)
@@ -406,6 +408,12 @@ def find_faq_answer(message):
 
 
 def handle_incident_report(message, user):
+    if not profile_is_complete(user):
+        return (
+            "Before I can log an incident report, please complete your profile first. "
+            "Go to My profile and fill in your age, phone, purok, address, birthday, and sex. "
+            "Once your profile is complete, I'll be happy to help you report an incident."
+        )
     text = " ".join(message.casefold().split())
     incident_keywords = ("report", "issue", "problem", "emergency", "incident",
                          "streetlight", "flood", "flooded", "road", "garbage",
@@ -432,6 +440,16 @@ def handle_incident_report(message, user):
         f"as a {category} issue. Barangay officials will review it and update the status. "
         "You can check your reports on the Incidents page."
     )
+
+
+def profile_is_complete(user):
+    """Return True if all required profile fields are filled in."""
+    required = ("full_name", "age", "phone", "purok", "address", "birthday", "sex")
+    for field in required:
+        value = user.get(field)
+        if value is None or str(value).strip() == "":
+            return False
+    return True
 
 
 def assistant_reply(message, user):
@@ -646,6 +664,13 @@ def assistant_request_action(message, user):
 
     if user["role"] != "resident":
         return None
+
+    if not profile_is_complete(user):
+        return (
+            "Before I can help you request a document, please complete your profile first. "
+            "Go to My profile and fill in your age, phone, purok, address, birthday, and sex. "
+            "Once your profile is complete, I'll be happy to help you request a certificate."
+        )
 
     has_request_intent = any(phrase in normalized for phrase in REQUEST_INTENTS)
     if not has_request_intent:
@@ -1178,6 +1203,8 @@ def update_profile():
     phone = request.form.get("phone", "").strip()[:40]
     purok = request.form.get("purok", "").strip()[:80]
     address = request.form.get("address", "").strip()[:200]
+    birthday = request.form.get("birthday", "").strip()
+    sex = request.form.get("sex", "").strip()
     if not full_name:
         flash("Full name is required.", "error")
         return redirect(url_for("profile_page"))
@@ -1191,12 +1218,15 @@ def update_profile():
         if not 1 <= age <= 120:
             flash("Enter an age between 1 and 120.", "error")
             return redirect(url_for("profile_page"))
+    if sex and sex not in ("Male", "Female", "Other", "Prefer not to say"):
+        flash("Please select a valid sex option.", "error")
+        return redirect(url_for("profile_page"))
     with get_db() as db:
         try:
             db.execute(
-                """UPDATE users SET full_name = ?, age = ?, phone = ?, purok = ?, address = ?
-                   WHERE id = ?""",
-                (full_name, age, phone, purok, address, user["id"]),
+                """UPDATE users SET full_name = ?, age = ?, phone = ?, purok = ?, address = ?,
+                   birthday = ?, sex = ? WHERE id = ?""",
+                (full_name, age, phone, purok, address, birthday, sex, user["id"]),
             )
         except sqlite3.Error:
             flash("Could not update your profile.", "error")

@@ -11,6 +11,10 @@
             <div><label for="age">Age</label><input id="age" name="age" type="number" min="1" max="120" value="{{ user.age or '' }}"></div>
             <div><label for="phone">Phone</label><input id="phone" name="phone" value="{{ user.phone }}" maxlength="40" placeholder="09xx xxx xxxx"></div>
         </div>
+        <div class="field-row">
+            <div><label for="birthday">Birthday</label><input id="birthday" name="birthday" type="date" value="{{ user.birthday or '' }}"></div>
+            <div><label for="sex">Sex</label><select id="sex" name="sex"><option value="">Select</option><option value="Male" {% if user.sex == 'Male' %}selected{% endif %}>Male</option><option value="Female" {% if user.sex == 'Female' %}selected{% endif %}>Female</option><option value="Other" {% if user.sex == 'Other' %}selected{% endif %}>Other</option><option value="Prefer not to say" {% if user.sex == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option></select></div>
+        </div>
         <label for="purok">Purok / Sitio</label>
         <input id="purok" name="purok" value="{{ user.purok }}" maxlength="80" placeholder="e.g. Purok 3">
         <label for="address">Address</label>
