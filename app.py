@@ -288,27 +288,86 @@ app.jinja_env.globals["csrf_token"] = csrf_token
 
 
 def get_notification_count(user):
-    if not user or user["role"] != "resident":
+    if not user:
         return 0
     with get_db() as db:
-        count = db.execute(
-            """SELECT COUNT(*) FROM notifications
-               WHERE user_id = ? AND is_read = 0""",
-            (user["id"],),
-        ).fetchone()[0]
+        if user["role"] == "resident":
+            count = db.execute(
+                """SELECT COUNT(*) FROM notifications
+                   WHERE user_id = ? AND is_read = 0""",
+                (user["id"],),
+            ).fetchone()[0]
+        else:
+            # Officials and admins see new requests and incidents needing attention
+            count = db.execute(
+                """SELECT COUNT(*) FROM service_requests WHERE status = 'Pending'
+                   UNION ALL
+                   SELECT COUNT(*) FROM incidents WHERE status = 'open'"""
+            ).fetchone()[0]
+            # The UNION ALL returns one column with two rows, so sum them
+            # Actually, simpler: count pending requests + open incidents
+            count_req = db.execute(
+                "SELECT COUNT(*) FROM service_requests WHERE status = 'Pending'"
+            ).fetchone()[0]
+            count_inc = db.execute(
+                "SELECT COUNT(*) FROM incidents WHERE status = 'open'"
+            ).fetchone()[0]
+            count = count_req + count_inc
     return count
 
 
 def get_recent_notifications(user, limit=5):
-    if not user or user["role"] != "resident":
+    if not user:
         return []
     with get_db() as db:
-        return db.execute(
-            """SELECT * FROM notifications
-               WHERE user_id = ?
-               ORDER BY created_at DESC LIMIT ?""",
-            (user["id"], limit),
-        ).fetchall()
+        if user["role"] == "resident":
+            return db.execute(
+                """SELECT * FROM notifications
+                   WHERE user_id = ?
+                   ORDER BY created_at DESC LIMIT ?""",
+                (user["id"], limit),
+            ).fetchall()
+        else:
+            # Officials/admins see pending requests and open incidents
+            items = []
+            reqs = db.execute(
+                """SELECT id, request_type AS title, created_at, resident_id
+                   FROM service_requests
+                   WHERE status = 'Pending'
+                   ORDER BY created_at DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+            for r in reqs:
+                items.append({
+                    "id": r["id"],
+                    "type": "request",
+                    "title": f"New request: {r['request_type']}",
+                    "message": "A resident submitted a document request.",
+                    "link": url_for("request_detail", request_id=r["id"]),
+                    "created_at": r["created_at"],
+                    "is_read": 0,
+                    "resident_name": None,
+                })
+            incs = db.execute(
+                """SELECT id, title, created_at, resident_id
+                   FROM incidents
+                   WHERE status = 'open'
+                   ORDER BY created_at DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+            for r in incs:
+                items.append({
+                    "id": r["id"],
+                    "type": "incident",
+                    "title": f"New concern: {r['title'][:60]}",
+                    "message": "A resident reported an incident.",
+                    "link": url_for("incident_detail", incident_id=r["id"]),
+                    "created_at": r["created_at"],
+                    "is_read": 0,
+                    "resident_name": None,
+                })
+            items.sort(key=lambda x: x["created_at"] or "", reverse=True)
+            return items[:limit]
 
 
 def navigation_context():

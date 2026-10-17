@@ -45,7 +45,7 @@
                         {% endif %}
                     </button>
                     <div class="notification-dropdown" id="notification-dropdown" role="menu" hidden>
-                        <div class="notification-header"><strong>New Announcements</strong><span class="notification-close" id="notification-close">×</span></div>
+                        <div class="notification-header"><strong>New Notifications</strong><span class="notification-close" id="notification-close">×</span></div>
                         {% with notifs = recent_notifications or [] %}
                         {% if notifs %}
                         <ul class="notification-list">
@@ -70,7 +70,11 @@
                         <p class="notification-empty">No new notifications.</p>
                         {% endif %}
                         {% endwith %}
+                        {% if user.role == "resident" %}
                         <div class="notification-footer"><a href="{{ url_for('announcements_page') }}">View all announcements</a></div>
+                        {% else %}
+                        <div class="notification-footer"><a href="{{ url_for('requests_page') }}">View all requests</a> · <a href="{{ url_for('incidents_page') }}">View all incidents</a></div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="profile-menu">
