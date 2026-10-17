@@ -307,8 +307,7 @@ def navigation_context():
         elif pending.get("stage") == "confirm":
             moss_suggestions = ["Yes, submit it", "Cancel request"]
     elif session.get("user_role") == "resident":
-        user_for_suggestions = current_user()
-        if user_for_suggestions and not profile_is_complete(user_for_suggestions):
+        if session.get("moss_awaiting_profile"):
             moss_suggestions = ["Complete my profile"]
         else:
             moss_suggestions = ["I need a certificate"]
@@ -674,10 +673,11 @@ def assistant_request_action(message, user):
         return None
 
     if not profile_is_complete(user):
+        session["moss_awaiting_profile"] = True
         return (
-            "Before I can help you request a document, please complete your profile first. "
-            "Go to My profile and fill in your age, phone, purok, address, birthday, and sex. "
-            "Once your profile is complete, I'll be happy to help you request a certificate."
+            "Please complete your profile first before requesting a document. "
+            "Fill in your age, phone, purok, address, birthday, and sex in My profile, "
+            "then I’ll be happy to help you request a certificate."
         )
 
     has_request_intent = any(phrase in normalized for phrase in REQUEST_INTENTS)
@@ -1239,6 +1239,7 @@ def update_profile():
         except sqlite3.Error:
             flash("Could not update your profile.", "error")
             return redirect(url_for("profile_page"))
+    session.pop("moss_awaiting_profile", None)
     log_activity(user["id"], "update_profile", "Resident updated own profile")
     flash("Your profile has been updated.", "success")
     return redirect(url_for("profile_page"))
@@ -1560,6 +1561,7 @@ def assistant():
         return redirect(return_to + "?moss=open#moss-chat")
 
     if message.strip().lower() == "complete my profile":
+        session.pop("moss_awaiting_profile", None)
         return redirect(url_for("profile_page") + "?moss=open#moss-chat")
 
     reply = assistant_request_action(message, user)
