@@ -46,20 +46,28 @@
                     </button>
                     <div class="notification-dropdown" id="notification-dropdown" role="menu" hidden>
                         <div class="notification-header"><strong>New Announcements</strong><span class="notification-close" id="notification-close">×</span></div>
-                        {% with announcements = recent_announcements or [] %}
-                        {% if announcements %}
+                        {% with notifs = recent_notifications or [] %}
+                        {% if notifs %}
                         <ul class="notification-list">
-                            {% for post in announcements[:5] %}
+                            {% for n in notifs[:5] %}
                             <li class="notification-item">
-                                <a href="{{ url_for('announcements_page') }}" class="notification-link">
-                                    <span class="notification-title">{{ post.title }}</span>
-                                    <span class="notification-time">{{ post.created_at[:16] }}</span>
+                                <a href="{{ n.link or url_for('announcements_page') }}" class="notification-link">
+                                    <span class="notification-icon">
+                                        {% if n.type == 'request' %}📄
+                                        {% elif n.type == 'incident' %}🚨
+                                        {% else %}📢{% endif %}
+                                    </span>
+                                    <span class="notification-title">{{ n.title }}</span>
+                                    <span class="notification-time">{{ n.created_at[:16] }}</span>
+                                    {% if not n.is_read %}
+                                    <span class="notification-new">new</span>
+                                    {% endif %}
                                 </a>
                             </li>
                             {% endfor %}
                         </ul>
                         {% else %}
-                        <p class="notification-empty">No new announcements.</p>
+                        <p class="notification-empty">No new notifications.</p>
                         {% endif %}
                         {% endwith %}
                         <div class="notification-footer"><a href="{{ url_for('announcements_page') }}">View all announcements</a></div>

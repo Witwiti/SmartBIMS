@@ -184,6 +184,16 @@ def init_db():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                type TEXT NOT NULL DEFAULT 'info',
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                link TEXT NOT NULL DEFAULT '',
+                is_read INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -195,6 +205,38 @@ def log_activity(actor_id, action, details=""):
                 "INSERT INTO activity_log (actor_id, action, details) VALUES (?, ?, ?)",
                 (actor_id, action, (details or "")[:500]),
             )
+    except sqlite3.Error:
+        pass
+
+
+def create_notification(user_id, notif_type, title, message, link=""):
+    try:
+        with get_db() as db:
+            db.execute(
+                """INSERT INTO notifications (user_id, type, title, message, link)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (user_id, notif_type, title, message, link),
+            )
+    except sqlite3.Error:
+        pass
+
+
+def notify_all_residents(title, message, link=""):
+    """Send a notification to all active residents."""
+    try:
+        with get_db() as db:
+            resident_ids = [
+                row["id"]
+                for row in db.execute(
+                    "SELECT id FROM users WHERE role = 'resident' AND active = 1"
+                ).fetchall()
+            ]
+            for rid in resident_ids:
+                db.execute(
+                    """INSERT INTO notifications (user_id, type, title, message, link)
+                       VALUES (?, 'announcement', ?, ?, ?)""",
+                    (rid, title, message, link),
+                )
     except sqlite3.Error:
         pass
 
@@ -250,19 +292,22 @@ def get_notification_count(user):
         return 0
     with get_db() as db:
         count = db.execute(
-            """SELECT COUNT(*) FROM announcements
-               WHERE created_at >= datetime('now', '-7 days')"""
+            """SELECT COUNT(*) FROM notifications
+               WHERE user_id = ? AND is_read = 0""",
+            (user["id"],),
         ).fetchone()[0]
     return count
 
 
-def get_recent_announcements(limit=5):
+def get_recent_notifications(user, limit=5):
+    if not user or user["role"] != "resident":
+        return []
     with get_db() as db:
         return db.execute(
-            """SELECT announcements.*, users.full_name AS author_name
-               FROM announcements LEFT JOIN users ON users.id = announcements.created_by
+            """SELECT * FROM notifications
+               WHERE user_id = ?
                ORDER BY created_at DESC LIMIT ?""",
-            (limit,),
+            (user["id"], limit),
         ).fetchall()
 
 
@@ -338,7 +383,7 @@ def navigation_context():
         "page_title": page_title,
         "page_description": page_description,
         "notification_count": get_notification_count(user),
-        "recent_announcements": get_recent_announcements() if user and user["role"] == "resident" else [],
+        "recent_notifications": get_recent_notifications(user) if user and user["role"] == "resident" else [],
         "active_page": {
             "dashboard": "dashboard",
             "requests_page": "requests",
@@ -1245,6 +1290,11 @@ def create_announcement():
                 (title, body, is_pinned, current_user()["id"]),
             )
         log_activity(current_user()["id"], "create_announcement", title[:120])
+        notify_all_residents(
+            f"New announcement: {title}",
+            body[:200],
+            url_for("announcements_page"),
+        )
         flash("Announcement published.", "success")
     return redirect(url_for("announcements_page"))
 
@@ -1530,6 +1580,13 @@ def create_incident():
             "SELECT last_insert_rowid()"
         ).fetchone()[0]
     log_activity(user["id"], "create_incident", f"Incident #{incident_id}: {title[:80]}")
+    create_notification(
+        user["id"],
+        "incident",
+        f"Incident #{incident_id:04d} reported",
+        f"Your concern ({category.replace('_', ' ').title()}) has been logged and is under review.",
+        url_for("incident_detail", incident_id=incident_id),
+    )
     flash("Incident reported successfully. It has been logged for review.", "success")
     return redirect(url_for("incidents_page"))
 
@@ -1570,6 +1627,12 @@ def update_incident(incident_id):
     if status not in valid_statuses:
         abort(400, description="Invalid status.")
     with get_db() as db:
+        resident_row = db.execute(
+            "SELECT resident_id FROM incidents WHERE id = ?", (incident_id,)
+        ).fetchone()
+        if resident_row is None:
+            abort(404)
+        resident_id = resident_row["resident_id"]
         result = db.execute(
             """UPDATE incidents SET status = ?, updated_at = CURRENT_TIMESTAMP
                WHERE id = ?""",
@@ -1578,6 +1641,13 @@ def update_incident(incident_id):
         if result.rowcount == 0:
             abort(404)
     log_activity(current_user()["id"], "update_incident", f"Incident #{incident_id} -> {status}")
+    create_notification(
+        resident_id,
+        "incident",
+        f"Incident #{incident_id:04d} status updated",
+        f"Your concern status changed to {status.replace('_', ' ').title()}.",
+        url_for("incident_detail", incident_id=incident_id),
+    )
     flash(f"Incident status updated to {status}.", "success")
     return redirect(url_for("incident_detail", incident_id=incident_id))
 
@@ -1701,6 +1771,13 @@ def create_request():
             new_id = cursor.lastrowid
         log_request_event(new_id, user["id"], "", "Pending", "Request submitted")
         log_activity(user["id"], "create_request", f"{request_type} #{new_id:04d}")
+        create_notification(
+            user["id"],
+            "request",
+            f"Request #{new_id:04d} submitted",
+            f"Your {request_type} request has been submitted and is pending review.",
+            url_for("request_detail", request_id=new_id),
+        )
         flash("Your request has been sent to the barangay office.", "success")
     return redirect(url_for("requests_page"))
 
@@ -1714,11 +1791,12 @@ def update_request(request_id):
         abort(400, description="Choose a valid request status.")
     with get_db() as db:
         current = db.execute(
-            "SELECT status FROM service_requests WHERE id = ?", (request_id,)
+            "SELECT status, resident_id FROM service_requests WHERE id = ?", (request_id,)
         ).fetchone()
         if current is None:
             abort(404)
         old_status = current["status"]
+        resident_id = current["resident_id"]
         db.execute(
             """UPDATE service_requests SET status = ?, official_note = ?,
                       updated_at = CURRENT_TIMESTAMP WHERE id = ?""",
@@ -1726,6 +1804,13 @@ def update_request(request_id):
         )
     log_request_event(request_id, current_user()["id"], old_status, status, note)
     log_activity(current_user()["id"], "update_request", f"Request #{request_id:04d}: {old_status} -> {status}")
+    create_notification(
+        resident_id,
+        "request",
+        f"Request #{request_id:04d} status updated",
+        f"Your request status changed from {old_status} to {status}.",
+        url_for("request_detail", request_id=request_id),
+    )
     flash("Request status updated.", "success")
     next_page = request.form.get("next", "")
     if next_page == "detail":
