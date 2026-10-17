@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Blotter {{ blotter.blotter_number }}{% endblock %}
+{% block content %}
+<section class="panel request-panel">
+    <div class="panel-heading-actions"><span class="count-badge">{{ blotter.blotter_number }}</span></div>
+    <div>
+        <span class="eyebrow">{{ blotter.created_at[:16] }}</span>
+        <h2>Blotter Record</h2>
+    </div>
+    <div class="field-row">
+        <div><strong>Complainant:</strong> {{ blotter.complainant_name }}</div>
+        <div><strong>Status:</strong> <span class="status status-{{ blotter.status }}">{{ blotter.status|replace('_', ' ')|title }}</span></div>
+    </div>
+    <div class="field-row">
+        <div><strong>Address:</strong> {{ blotter.complainant_address or "Not specified" }}</div>
+        <div><strong>Person Involved:</strong> {{ blotter.person_involved or "Not specified" }}</div>
+    </div>
+    <p><strong>Nature of Complaint:</strong></p>
+    <p>{{ blotter.nature_of_complaint }}</p>
+    {% if blotter.location %}
+    <p><strong>Location:</strong> {{ blotter.location }}</p>
+    {% endif %}
+    {% if blotter.date_time_incident %}
+    <p><strong>Date &amp; Time of Incident:</strong> {{ blotter.date_time_incident }}</p>
+    {% endif %}
+    {% if blotter.action_taken %}
+    <p><strong>Action Taken:</strong> {{ blotter.action_taken }}</p>
+    {% endif %}
+    <p><strong>Reported by:</strong> {{ blotter.reported_by_name or "Staff" }}</p>
+    <div class="detail-actions">
+        <form method="post" action="{{ url_for('update_blotter', blotter_id=blotter.id) }}" onsubmit="return confirm('Update blotter status?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="status" class="visually-hidden">Status</label>
+            <select id="status" name="status" required>
+                {% for s in statuses %}
+                <option value="{{ s }}" {% if s == blotter.status %}selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+            <label for="action_taken" class="visually-hidden">Action Taken</label>
+            <textarea id="action_taken" name="action_taken" rows="2" maxlength="1000" placeholder="Action taken (optional)">{{ blotter.action_taken or '' }}</textarea>
+            <button class="button button-primary modal-submit" type="submit">Update</button>
+        </form>
+    </div>
+    <p><a class="button button-small" href="{{ url_for('blotters_page') }}">Back to blotter</a></p>
+</section>
+{% endblock %}

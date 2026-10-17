@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Blotter{% endblock %}
+{% block content %}
+<section class="panel filter-panel">
+    <form method="get" action="{{ url_for('blotters_page') }}" class="filter-form" data-autofilter>
+        <input type="search" name="search" value="{{ search }}" placeholder="Search blotter records..." aria-label="Search blotters" autocomplete="off">
+        <select name="status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            {% for status in statuses %}
+            <option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+        <button class="button button-small" type="submit">Filter</button>
+        {% if search or status_filter %}<a class="button button-small button-quiet" href="{{ url_for('blotters_page') }}">Clear</a>{% endif %}
+    </form>
+</section>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">BARANGAY BLOTTER</span><h2>Blotter Records ({{ blotters|length }})</h2></div><button class="button button-small" id="blotter-open" type="button">+ New Blotter</button></div>
+    {% if blotters %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>Blotter #</th><th>Complainant</th><th>Person Involved</th><th>Nature of Complaint</th><th>Status</th><th>Reported by</th><th></th></tr></thead>
+        <tbody>{% for b in blotters %}
+            <tr>
+                <td><strong>{{ b.blotter_number }}</strong></td>
+                <td><a href="{{ url_for('blotter_detail', blotter_id=b.id) }}">{{ b.complainant_name }}</a><small class="cell-sub">{{ b.complainant_address }}</small></td>
+                <td>{{ b.person_involved or "—" }}</td>
+                <td class="purpose-cell">{{ b.nature_of_complaint[:80] }}{% if b.nature_of_complaint|length > 80 %}…{% endif %}</td>
+                <td><span class="status status-{{ b.status }}">{{ b.status|replace('_', ' ')|title }}</span></td>
+                <td>{{ b.reported_by_name or "Staff" }}</td>
+                <td><a href="{{ url_for('blotter_detail', blotter_id=b.id) }}" class="button button-small button-quiet">View</a></td>
+            </tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="file-text"></i></span><strong>No blotter records yet</strong><p>Blotter entries will appear here.</p></div>
+    {% endif %}
+</section>
+<div class="modal-overlay" id="blotter-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="blotter-title">
+        <div class="modal-head">
+            <div><span class="eyebrow">NEW BLOTTER ENTRY</span><h2 id="blotter-title">Create Blotter Record</h2></div>
+            <button class="modal-close" type="button" data-close-modal aria-label="Close"><i data-lucide="x"></i></button>
+        </div>
+        <p class="muted">Blotter numbers are auto-generated (e.g., BLTR-2026-0001).</p>
+        <form method="post" action="{{ url_for('create_blotter') }}" class="form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-row">
+                <div><label for="complainant_name">Complainant Name</label><input id="complainant_name" name="complainant_name" maxlength="150" required placeholder="Full name of complainant"></div>
+                <div><label for="status">Status</label><select id="status" name="status" required>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                </select></div>
+            </div>
+            <label for="complainant_address">Complainant Address</label>
+            <input id="complainant_address" name="complainant_address" maxlength="200" placeholder="Street, purok, barangay">
+            <label for="person_involved">Person Involved (respondent)</label>
+            <input id="person_involved" name="person_involved" maxlength="150" placeholder="Name of person involved">
+            <label for="nature_of_complaint">Nature of Complaint</label>
+            <textarea id="nature_of_complaint" name="nature_of_complaint" rows="4" maxlength="1000" required placeholder="Describe the complaint in detail"></textarea>
+            <label for="location">Location</label>
+            <input id="location" name="location" maxlength="200" placeholder="Where did the incident occur?">
+            <label for="date_time_incident">Date &amp; Time of Incident</label>
+            <input id="date_time_incident" name="date_time_incident" type="datetime-local">
+            <label for="action_taken">Action Taken</label>
+            <textarea id="action_taken" name="action_taken" rows="3" maxlength="1000" placeholder="What action was taken? (optional)"></textarea>
+            <div class="modal-actions">
+                <button class="button button-quiet" type="button" data-close-modal>Cancel</button>
+                <button class="button button-primary modal-submit" type="submit">Create Blotter</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(() => {
+    const openBtn = document.getElementById("blotter-open");
+    const overlay = document.getElementById("blotter-modal");
+    if (!openBtn || !overlay) return;
+    const firstInput = overlay.querySelector("input[name='complainant_name']");
+    const open = () => {
+        overlay.hidden = false;
+        document.body.classList.add("modal-open");
+        if (firstInput) firstInput.focus();
+    };
+    const close = () => {
+        overlay.hidden = true;
+        document.body.classList.remove("modal-open");
+        openBtn.focus();
+    };
+    openBtn.addEventListener("click", open);
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay || event.target.closest("[data-close-modal]")) close();
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !overlay.hidden) close();
+    });
+})();
+</script>
+{% endblock %}

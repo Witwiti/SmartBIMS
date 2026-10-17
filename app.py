@@ -194,6 +194,21 @@ def init_db():
                 is_read INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS blotters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blotter_number TEXT NOT NULL UNIQUE,
+                complainant_name TEXT NOT NULL,
+                complainant_address TEXT NOT NULL DEFAULT '',
+                person_involved TEXT NOT NULL DEFAULT '',
+                nature_of_complaint TEXT NOT NULL,
+                location TEXT NOT NULL DEFAULT '',
+                date_time_incident TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                action_taken TEXT NOT NULL DEFAULT '',
+                reported_by INTEGER REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -458,6 +473,8 @@ def navigation_context():
             "incidents_page": "incidents",
             "incident_detail": "incidents",
             "faqs_page": "incidents",
+            "blotters_page": "blotters",
+            "blotter_detail": "blotters",
         }.get(request.endpoint, ""),
         "assistant_messages": session.get("assistant_messages", []),
         "moss_suggestions": moss_suggestions,
@@ -1709,6 +1726,147 @@ def update_incident(incident_id):
     )
     flash(f"Incident status updated to {status}.", "success")
     return redirect(url_for("incident_detail", incident_id=incident_id))
+
+
+@app.route("/blotters")
+@roles_required("admin", "official")
+def blotters_page():
+    search = request.args.get("search", "").strip()[:80]
+    status_filter = request.args.get("status", "").strip()
+    valid_statuses = {"open", "in_progress", "resolved", "closed"}
+    if status_filter not in valid_statuses:
+        status_filter = ""
+    with get_db() as db:
+        query = """SELECT blotters.*, users.full_name AS reported_by_name
+                   FROM blotters LEFT JOIN users ON users.id = blotters.reported_by
+                   WHERE 1 = 1"""
+        params = []
+        if search:
+            like = f"%{search}%"
+            query += " AND (blotter_number LIKE ? OR complainant_name LIKE ? OR person_involved LIKE ? OR nature_of_complaint LIKE ?)"
+            params.extend([like, like, like, like])
+        if status_filter:
+            query += " AND status = ?"
+            params.append(status_filter)
+        query += " ORDER BY created_at DESC, id DESC"
+        blotters = db.execute(query, params).fetchall()
+    return render_template(
+        "blotters.html",
+        user=current_user(),
+        blotters=blotters,
+        search=search,
+        status_filter=status_filter,
+        statuses=sorted(valid_statuses),
+        today=date.today().strftime("%A, %B %d, %Y"),
+    )
+
+
+@app.route("/blotters", methods=["POST"])
+@roles_required("admin", "official")
+def create_blotter():
+    user = current_user()
+    complainant_name = request.form.get("complainant_name", "").strip()[:150]
+    complainant_address = request.form.get("complainant_address", "").strip()[:200]
+    person_involved = request.form.get("person_involved", "").strip()[:150]
+    nature_of_complaint = request.form.get("nature_of_complaint", "").strip()[:1000]
+    location = request.form.get("location", "").strip()[:200]
+    date_time_incident = request.form.get("date_time_incident", "").strip()
+    status = request.form.get("status", "open").strip()
+    action_taken = request.form.get("action_taken", "").strip()[:1000]
+    valid_statuses = {"open", "in_progress", "resolved", "closed"}
+    if status not in valid_statuses:
+        status = "open"
+    if not complainant_name or not nature_of_complaint:
+        flash("Complainant name and nature of complaint are required.", "error")
+        return redirect(url_for("blotters_page"))
+    with get_db() as db:
+        # Generate blotter number: BLTR-YYYY-NNNN
+        from datetime import date as _date
+        today = _date.today()
+        year_str = today.strftime("%Y")
+        last = db.execute(
+            """SELECT blotter_number FROM blotters
+               WHERE blotter_number LIKE ?
+               ORDER BY id DESC LIMIT 1""",
+            (f"BLTR-{year_str}-%",),
+        ).fetchone()
+        if last:
+            try:
+                last_num = int(last["blotter_number"].split("-")[-1])
+            except (ValueError, AttributeError):
+                last_num = 0
+        else:
+            last_num = 0
+        blotter_number = f"BLTR-{year_str}-{last_num + 1:04d}"
+        db.execute(
+            """INSERT INTO blotters
+               (blotter_number, complainant_name, complainant_address, person_involved,
+                nature_of_complaint, location, date_time_incident, status, action_taken, reported_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                blotter_number, complainant_name, complainant_address, person_involved,
+                nature_of_complaint, location, date_time_incident, status, action_taken,
+                user["id"],
+            ),
+        )
+        blotter_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    log_activity(user["id"], "create_blotter", f"Blotter {blotter_number}: {complainant_name[:60]}")
+    create_notification(
+        user["id"],
+        "blotter",
+        f"Blotter {blotter_number} created",
+        f"New blotter for {complainant_name} has been logged.",
+        url_for("blotter_detail", blotter_id=blotter_id),
+    )
+    flash(f"Blotter {blotter_number} created successfully.", "success")
+    return redirect(url_for("blotters_page"))
+
+
+@app.route("/blotters/<int:blotter_id>")
+@roles_required("admin", "official")
+def blotter_detail(blotter_id):
+    user = current_user()
+    with get_db() as db:
+        blotter = db.execute(
+            """SELECT blotters.*, users.full_name AS reported_by_name
+               FROM blotters LEFT JOIN users ON users.id = blotters.reported_by
+               WHERE blotters.id = ?""",
+            (blotter_id,),
+        ).fetchone()
+        if blotter is None:
+            abort(404)
+    return render_template(
+        "blotter_detail.html",
+        user=user,
+        blotter=blotter,
+        statuses={"open", "in_progress", "resolved", "closed"},
+        today=date.today().strftime("%A, %B %d, %Y"),
+    )
+
+
+@app.route("/blotters/<int:blotter_id>/update", methods=["POST"])
+@roles_required("admin", "official")
+def update_blotter(blotter_id):
+    status = request.form.get("status", "").strip()
+    action_taken = request.form.get("action_taken", "").strip()[:1000]
+    valid_statuses = {"open", "in_progress", "resolved", "closed"}
+    if status not in valid_statuses:
+        abort(400, description="Invalid status.")
+    with get_db() as db:
+        result = db.execute(
+            """UPDATE blotters SET status = ?, action_taken = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (status, action_taken, blotter_id),
+        )
+        if result.rowcount == 0:
+            abort(404)
+        blotter = db.execute(
+            "SELECT blotter_number, complainant_name FROM blotters WHERE id = ?",
+            (blotter_id,),
+        ).fetchone()
+    log_activity(current_user()["id"], "update_blotter", f"Blotter {blotter['blotter_number']} -> {status}")
+    flash(f"Blotter {blotter['blotter_number']} updated.", "success")
+    return redirect(url_for("blotter_detail", blotter_id=blotter_id))
 
 
 @app.route("/faqs")
