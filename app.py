@@ -1487,6 +1487,28 @@ def not_found(_error):
 
 init_db()
 
+# Auto-create admin account on first deploy if none exists (Render free-tier friendly)
+try:
+    with get_db() as db:
+        admin_exists = db.execute(
+            "SELECT 1 FROM users WHERE role = 'admin' LIMIT 1"
+        ).fetchone()
+        if admin_exists is None:
+            admin_username = os.environ.get("BIMS_ADMIN_USERNAME", "admin").strip()
+            admin_name = os.environ.get("BIMS_ADMIN_NAME", "System Administrator").strip()
+            admin_password = os.environ.get("BIMS_ADMIN_PASSWORD")
+            if admin_password and len(admin_password) >= 8:
+                db.execute(
+                    """INSERT INTO users (username, password_hash, full_name, role)
+                       VALUES (?, ?, ?, 'admin')""",
+                    (admin_username, generate_password_hash(admin_password), admin_name),
+                )
+                print(f"Administrator '{admin_username}' created automatically.")
+            else:
+                print("WARNING: No admin account created. Set BIMS_ADMIN_PASSWORD (8+ chars) to create one.")
+except sqlite3.Error:
+    pass
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=os.environ.get("BIMS_DEBUG") == "1")
