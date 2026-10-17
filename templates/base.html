@@ -72,6 +72,34 @@
                 <footer class="content-foot">Barangay Information Management System <span>·</span> For official community services</footer>
             </div>
         </main>
+
+        <nav class="bottom-nav" aria-label="Bottom navigation">
+            <a href="{{ url_for('dashboard') }}" class="bottom-nav-item {% if active_page == 'dashboard' %}active{% endif %}" aria-label="Dashboard">
+                <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('requests_page') }}" class="bottom-nav-item {% if active_page == 'requests' %}active{% endif %}" aria-label="Requests">
+                <i data-lucide="file-text"></i><span>{{ "My requests" if user.role == "resident" else "Requests" }}</span>
+            </a>
+            <a href="{{ url_for('announcements_page') }}" class="bottom-nav-item {% if active_page == 'announcements' %}active{% endif %}" aria-label="Announcements">
+                <i data-lucide="megaphone"></i><span>Announcements</span>
+            </a>
+            {% if user.role in ("admin", "official") %}
+            <a href="{{ url_for('residents_page') }}" class="bottom-nav-item {% if active_page == 'residents' %}active{% endif %}" aria-label="Residents">
+                <i data-lucide="users"></i><span>Residents</span>
+            </a>
+            <a href="{{ url_for('reports_page') }}" class="bottom-nav-item {% if active_page == 'reports' %}active{% endif %}" aria-label="Reports">
+                <i data-lucide="chart-column"></i><span>Reports</span>
+            </a>
+            {% endif %}
+            {% if user.role == "admin" %}
+            <a href="{{ url_for('accounts_page') }}" class="bottom-nav-item {% if active_page == 'accounts' %}active{% endif %}" aria-label="Accounts">
+                <i data-lucide="settings"></i><span>Accounts</span>
+            </a>
+            {% endif %}
+            <a href="{{ url_for('profile_page') }}" class="bottom-nav-item {% if active_page == 'profile' %}active{% endif %}" aria-label="Profile">
+                <i data-lucide="circle-user-round"></i><span>Profile</span>
+            </a>
+        </nav>
     </div>
     <details class="moss-widget {% if session.get('moss_boot_seen') %}moss-booted{% endif %}" id="moss-chat" data-boot-id="{{ session.get('moss_boot_id', '') }}" {% if request.args.get('moss') == 'open' %}open{% endif %}>
         <summary class="moss-launcher" aria-label="Open Moss Virtual Assistant">
