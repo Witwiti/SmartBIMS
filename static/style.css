@@ -393,9 +393,13 @@ td strong { color: #2a3934; font-size: 11px; font-weight: 600; }
     .panel-heading { padding: 16px; }
 }
 
+@media (max-width: 760px) {
+    .moss-widget { right: 16px; bottom: 80px; } /* sit above bottom nav */
+    .moss-window { width: min(370px, calc(100vw - 32px)); height: min(520px, calc(100vh - 140px)); margin-bottom: 70px; }
+}
 @media (max-width: 450px) {
-    .moss-widget { right: 13px; bottom: 13px; }
-    .moss-window { width: min(370px, calc(100vw - 26px)); height: min(500px, calc(100vh - 95px)); margin-bottom: 62px; }
+    .moss-widget { right: 13px; bottom: 75px; }
+    .moss-window { width: min(370px, calc(100vw - 26px)); height: min(500px, calc(100vh - 135px)); margin-bottom: 62px; }
 }
 
 @media (max-width: 450px) {
