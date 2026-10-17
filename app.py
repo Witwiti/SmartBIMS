@@ -445,11 +445,15 @@ def handle_incident_report(message, user):
 def profile_is_complete(user):
     """Return True if all required profile fields are filled in."""
     required = ("full_name", "age", "phone", "purok", "address", "birthday", "sex")
-    for field in required:
-        value = user.get(field)
-        if value is None or str(value).strip() == "":
-            return False
-    return True
+    try:
+        for field in required:
+            value = user[field]
+            if value is None or str(value).strip() == "":
+                return False
+        return True
+    except (KeyError, IndexError, sqlite3.OperationalError):
+        # Columns may not exist yet if migration hasn't run
+        return False
 
 
 def assistant_reply(message, user):
