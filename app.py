@@ -311,6 +311,8 @@ def navigation_context():
             moss_suggestions = ["Complete my profile"]
         else:
             moss_suggestions = ["I need a certificate", "I have a concern"]
+    elif session.get("user_role") in ("admin", "official"):
+        moss_suggestions = ["View incidents", "Manage FAQs"]
     return {
         "page_title": page_title,
         "page_description": page_description,
@@ -465,10 +467,11 @@ def assistant_reply(message, user):
     faq_answer = find_faq_answer(message)
     if faq_answer:
         return faq_answer
-    # 2. Check incident reporting
-    incident_reply = handle_incident_report(message, user)
-    if incident_reply:
-        return incident_reply
+    # 2. Check incident reporting (residents only)
+    if user["role"] == "resident":
+        incident_reply = handle_incident_report(message, user)
+        if incident_reply:
+            return incident_reply
     if any(word in text for word in ("hello", "hi", "good morning", "good afternoon", "kumusta")):
         return f"Hello, {user['full_name'].split()[0]}! I can help with barangay services, document requests, announcements, reports, and portal questions."
     if any(word in text for word in ("announce", "notice", "update", "balita", "abiso")):
@@ -1631,6 +1634,12 @@ def assistant():
     if message.strip().lower() == "complete my profile":
         session.pop("moss_awaiting_profile", None)
         return redirect(url_for("profile_page") + "?moss=open#moss-chat")
+
+    if user["role"] in ("admin", "official"):
+        if message.strip().lower() == "view incidents":
+            return redirect(url_for("incidents_page") + "?moss=open#moss-chat")
+        if message.strip().lower() == "manage faqs":
+            return redirect(url_for("faqs_page") + "?moss=open#moss-chat")
 
     reply = assistant_request_action(message, user)
     append_assistant_exchange(
