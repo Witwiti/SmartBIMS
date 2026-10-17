@@ -17,6 +17,7 @@
             <div class="sidebar-label">WORKSPACE</div>
             <a class="side-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Overview</a>
             <a class="side-link {% if active_page == 'requests' %}active{% endif %}" href="{{ url_for('requests_page') }}"><span class="nav-icon"><i data-lucide="file-text"></i></span> {{ "My requests" if user.role == "resident" else "Service requests" }}</a>
+            <a class="side-link {% if active_page == 'incidents' %}active{% endif %}" href="{{ url_for('incidents_page') }}"><span class="nav-icon"><i data-lucide="alert-circle"></i></span> Incidents</a>
             <a class="side-link {% if active_page == 'announcements' %}active{% endif %}" href="{{ url_for('announcements_page') }}"><span class="nav-icon"><i data-lucide="megaphone"></i></span> Announcements</a>
             {% if user.role in ("admin", "official") %}
             <a class="side-link {% if active_page == 'residents' %}active{% endif %}" href="{{ url_for('residents_page') }}"><span class="nav-icon"><i data-lucide="users"></i></span> Residents</a>

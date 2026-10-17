@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Incident {{ incident.id }}{% endblock %}
+{% block content %}
+<section class="panel request-panel">
+    <div class="panel-heading-actions"><span class="count-badge">Report #{{ "%04d"|format(incident.id) }}</span></div>
+    <div><span class="eyebrow">{{ incident.created_at[:16] }}</span><h2>{{ incident.title }}</h2></div>
+    <p class="muted"><strong>Category:</strong> {{ incident.category|replace('_', ' ')|title }} · <strong>Location:</strong> {{ incident.location or "Not specified" }} · <strong>Reported by:</strong> {{ incident.resident_name or "Resident" }}</p>
+    <p>{{ incident.description }}</p>
+    <div class="detail-actions">
+        <form method="post" action="{{ url_for('update_incident', incident_id=incident.id) }}" onsubmit="return confirm('Update incident status to {{ status|join(' / ') }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="status" class="visually-hidden">Status</label>
+            <select id="status" name="status" required>
+                {% for s in statuses %}
+                <option value="{{ s }}" {% if s == incident.status %}selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+            <button class="button button-primary modal-submit" type="submit">Update status</button>
+        </form>
+    </div>
+    <p><a class="button button-small" href="{{ url_for('incidents_page') }}">Back to incidents</a></p>
+</section>
+{% endblock %}

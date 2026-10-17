@@ -159,6 +159,32 @@ def init_db():
             except sqlite3.OperationalError:
                 pass
 
+        # New tables for Moss AI features
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS faqs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'general',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'other',
+                status TEXT NOT NULL DEFAULT 'open',
+                resident_id INTEGER REFERENCES users(id),
+                location TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+
 
 def log_activity(actor_id, action, details=""):
     try:
@@ -295,6 +321,9 @@ def navigation_context():
             "profile_page": "profile",
             "change_password": "profile",
             "developers_page": "profile",
+            "incidents_page": "incidents",
+            "incident_detail": "incidents",
+            "faqs_page": "incidents",
         }.get(request.endpoint, ""),
         "assistant_messages": session.get("assistant_messages", []),
         "moss_suggestions": moss_suggestions,
@@ -363,8 +392,58 @@ def valid_profile(full_name, username, password, role):
     return None
 
 
+def find_faq_answer(message):
+    text = " ".join(message.casefold().split())
+    with get_db() as db:
+        faqs = db.execute(
+            "SELECT question, answer FROM faqs WHERE is_active = 1"
+        ).fetchall()
+    for faq in faqs:
+        q_words = set(faq["question"].casefold().split())
+        if q_words and q_words.issubset(set(text.split())):
+            return faq["answer"]
+    return None
+
+
+def handle_incident_report(message, user):
+    text = " ".join(message.casefold().split())
+    incident_keywords = ("report", "issue", "problem", "emergency", "incident",
+                         "streetlight", "flood", "flooded", "road", "garbage",
+                         "water", "electricity", "security", "light")
+    if not any(kw in text for kw in incident_keywords):
+        return None
+    # Extract a simple title from the message
+    title = text[:80]
+    category = "other"
+    for cat in ("streetlights", "flooding", "garbage", "water", "electricity", "roads", "security"):
+        if cat in text:
+            category = cat
+            break
+    with get_db() as db:
+        db.execute(
+            """INSERT INTO incidents (title, description, category, resident_id)
+               VALUES (?, ?, ?, ?)""",
+            (title, message[:1000], category, user["id"]),
+        )
+        incident_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    log_activity(user["id"], "create_incident_via_moss", f"Incident #{incident_id} via Moss")
+    return (
+        f"Thank you! I've logged your report (reference #{incident_id:04d}) "
+        f"as a {category} issue. Barangay officials will review it and update the status. "
+        "You can check your reports on the Incidents page."
+    )
+
+
 def assistant_reply(message, user):
     text = " ".join(message.casefold().split())
+    # 1. Check FAQs first
+    faq_answer = find_faq_answer(message)
+    if faq_answer:
+        return faq_answer
+    # 2. Check incident reporting
+    incident_reply = handle_incident_report(message, user)
+    if incident_reply:
+        return incident_reply
     if any(word in text for word in ("hello", "hi", "good morning", "good afternoon", "kumusta")):
         return f"Hello, {user['full_name'].split()[0]}! I can help with barangay services, document requests, announcements, reports, and portal questions."
     if any(word in text for word in ("announce", "notice", "update", "balita", "abiso")):
@@ -504,13 +583,17 @@ def assistant_request_action(message, user):
                 )
             pending["request_type"] = request_type
             pending["purpose"] = extract_request_purpose(message)
-            pending["stage"] = "confirm" if pending["purpose"] else "purpose"
+            pending["stage"] = "pickup" if pending["purpose"] else "purpose"
 
         elif pending.get("stage") == "purpose":
             purpose = extract_request_purpose(message) or message.strip()
             if len(purpose) > 500:
                 return "Please keep the purpose to 500 characters or fewer."
             pending["purpose"] = purpose
+            pending["stage"] = "pickup"
+
+        elif pending.get("stage") == "pickup":
+            pending["pickup_preference"] = message.strip()[:200]
             pending["stage"] = "confirm"
 
         if pending.get("stage") == "confirm":
@@ -519,12 +602,13 @@ def assistant_request_action(message, user):
             ):
                 with get_db() as db:
                     cursor = db.execute(
-                        """INSERT INTO service_requests (resident_id, request_type, purpose)
-                           VALUES (?, ?, ?)""",
+                        """INSERT INTO service_requests (resident_id, request_type, purpose, pickup_note)
+                           VALUES (?, ?, ?, ?)""",
                         (
                             user["id"],
                             pending["request_type"],
                             pending["purpose"],
+                            pending.get("pickup_preference", ""),
                         ),
                     )
                     request_id = cursor.lastrowid
@@ -533,9 +617,12 @@ def assistant_request_action(message, user):
                     log_request_event(request_id, user["id"], "", "Pending", "Submitted via Moss")
                 except sqlite3.Error:
                     pass
+                pickup_line = ""
+                if pending.get("pickup_preference"):
+                    pickup_line = f" Preferred pickup: {pending['pickup_preference']}."
                 return (
                     f"Done. I submitted your {pending['request_type']} request "
-                    f"(reference #{request_id:04d}) for {pending['purpose']}. "
+                    f"(reference #{request_id:04d}) for {pending['purpose']}.{pickup_line} "
                     "It is now pending review by the barangay office. Moss cannot approve "
                     "or issue the certificate; the office will process it and update its status."
                 )
@@ -550,6 +637,11 @@ def assistant_request_action(message, user):
             return (
                 f"What do you need the {pending['request_type']} for? "
                 "I will ask your permission before submitting anything."
+            )
+        if pending["stage"] == "pickup":
+            return (
+                f"When would you like to pick up your {pending['request_type']}? "
+                "Please tell me your preferred date or time (e.g., “tomorrow morning” or “next Friday”)."
             )
 
     if user["role"] != "resident":
@@ -1227,6 +1319,168 @@ def activity_page():
         search=search,
         today=date.today().strftime("%A, %B %d, %Y"),
     )
+
+
+@app.route("/incidents")
+@login_required
+def incidents_page():
+    user = current_user()
+    search = request.args.get("search", "").strip()[:80]
+    status_filter = request.args.get("status", "").strip()
+    category_filter = request.args.get("category", "").strip()
+    valid_statuses = {"open", "in_progress", "resolved", "closed"}
+    valid_categories = {
+        "streetlights", "flooding", "garbage", "water", "electricity",
+        "roads", "security", "other",
+    }
+    if status_filter not in valid_statuses:
+        status_filter = ""
+    if category_filter not in valid_categories:
+        category_filter = ""
+    with get_db() as db:
+        if user["role"] == "resident":
+            query = """SELECT * FROM incidents WHERE resident_id = ?"""
+            params = [user["id"]]
+        else:
+            query = """SELECT incidents.*, users.full_name AS resident_name
+                       FROM incidents LEFT JOIN users ON users.id = incidents.resident_id"""
+            params = []
+        if search:
+            like = f"%{search}%"
+            query += " AND (title LIKE ? OR description LIKE ? OR category LIKE ?)"
+            params.extend([like, like, like])
+        if status_filter:
+            query += " AND status = ?"
+            params.append(status_filter)
+        if category_filter:
+            query += " AND category = ?"
+            params.append(category_filter)
+        query += " ORDER BY created_at DESC, id DESC"
+        incidents = db.execute(query, params).fetchall()
+    return render_template(
+        "incidents.html",
+        user=user,
+        incidents=incidents,
+        search=search,
+        status_filter=status_filter,
+        category_filter=category_filter,
+        statuses=sorted(valid_statuses),
+        categories=sorted(valid_categories),
+        today=date.today().strftime("%A, %B %d, %Y"),
+    )
+
+
+@app.route("/incidents", methods=["POST"])
+@login_required
+def create_incident():
+    user = current_user()
+    title = request.form.get("title", "").strip()[:150]
+    description = request.form.get("description", "").strip()[:1000]
+    category = request.form.get("category", "other").strip()
+    location = request.form.get("location", "").strip()[:200]
+    valid_categories = {
+        "streetlights", "flooding", "garbage", "water", "electricity",
+        "roads", "security", "other",
+    }
+    if category not in valid_categories:
+        category = "other"
+    if not title or not description:
+        flash("Title and description are required.", "error")
+        return redirect(url_for("incidents_page"))
+    with get_db() as db:
+        db.execute(
+            """INSERT INTO incidents (title, description, category, location, resident_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            (title, description, category, location, user["id"]),
+        )
+        incident_id = db.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
+    log_activity(user["id"], "create_incident", f"Incident #{incident_id}: {title[:80]}")
+    flash("Incident reported successfully. It has been logged for review.", "success")
+    return redirect(url_for("incidents_page"))
+
+
+@app.route("/incidents/<int:incident_id>")
+@login_required
+def incident_detail(incident_id):
+    user = current_user()
+    with get_db() as db:
+        if user["role"] == "resident":
+            incident = db.execute(
+                """SELECT * FROM incidents WHERE id = ? AND resident_id = ?""",
+                (incident_id, user["id"]),
+            ).fetchone()
+        else:
+            incident = db.execute(
+                """SELECT incidents.*, users.full_name AS resident_name
+                   FROM incidents LEFT JOIN users ON users.id = incidents.resident_id
+                   WHERE incidents.id = ?""",
+                (incident_id,),
+            ).fetchone()
+        if incident is None:
+            abort(404)
+    return render_template(
+        "incident_detail.html",
+        user=user,
+        incident=incident,
+        statuses={"open", "in_progress", "resolved", "closed"},
+        today=date.today().strftime("%A, %B %d, %Y"),
+    )
+
+
+@app.route("/incidents/<int:incident_id>/update", methods=["POST"])
+@roles_required("admin", "official")
+def update_incident(incident_id):
+    status = request.form.get("status", "").strip()
+    valid_statuses = {"open", "in_progress", "resolved", "closed"}
+    if status not in valid_statuses:
+        abort(400, description="Invalid status.")
+    with get_db() as db:
+        result = db.execute(
+            """UPDATE incidents SET status = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (status, incident_id),
+        )
+        if result.rowcount == 0:
+            abort(404)
+    log_activity(current_user()["id"], "update_incident", f"Incident #{incident_id} -> {status}")
+    flash(f"Incident status updated to {status}.", "success")
+    return redirect(url_for("incident_detail", incident_id=incident_id))
+
+
+@app.route("/faqs")
+@roles_required("admin", "official")
+def faqs_page():
+    with get_db() as db:
+        faqs = db.execute(
+            "SELECT * FROM faqs WHERE is_active = 1 ORDER BY category, question"
+        ).fetchall()
+    return render_template(
+        "faqs.html",
+        user=current_user(),
+        faqs=faqs,
+        today=date.today().strftime("%A, %B %d, %Y"),
+    )
+
+
+@app.route("/faqs", methods=["POST"])
+@roles_required("admin")
+def create_faq():
+    question = request.form.get("question", "").strip()[:300]
+    answer = request.form.get("answer", "").strip()[:1000]
+    category = request.form.get("category", "general").strip()[:50]
+    if not question or not answer:
+        flash("Question and answer are required.", "error")
+        return redirect(url_for("faqs_page"))
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO faqs (question, answer, category) VALUES (?, ?, ?)",
+            (question, answer, category),
+        )
+    log_activity(current_user()["id"], "create_faq", f"FAQ: {question[:80]}")
+    flash("FAQ added successfully.", "success")
+    return redirect(url_for("faqs_page"))
 
 
 @app.route("/assistant", methods=["GET"])

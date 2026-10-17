@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Incidents{% endblock %}
+{% block content %}
+<section class="panel filter-panel">
+    <form method="get" action="{{ url_for('incidents_page') }}" class="filter-form" data-autofilter>
+        <input type="search" name="search" value="{{ search }}" placeholder="Search incidents..." aria-label="Search incidents" autocomplete="off">
+        <select name="status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            {% for status in statuses %}
+            <option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+        <select name="category" aria-label="Filter by category">
+            <option value="">All categories</option>
+            {% for category in categories %}
+            <option value="{{ category }}" {% if category_filter == category %}selected{% endif %}>{{ category|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+        {% if search or status_filter or category_filter %}<a class="button button-small button-quiet" href="{{ url_for('incidents_page') }}">Clear</a>{% endif %}
+    </form>
+</section>
+<section class="panel data-panel">
+    <div class="panel-heading"><div><span class="eyebrow">EMERGENCY &amp; INCIDENT REPORTS</span><h2>Incidents ({{ incidents|length }})</h2></div>{% if user.role in ("admin", "official") or user.role == "resident" %}<button class="button button-small" id="incident-open" type="button">+ Report incident</button>{% endif %}</div>
+    {% if incidents %}
+    <div class="table-wrap"><table>
+        <thead><tr><th>When</th><th>Title</th><th>Category</th><th>Status</th><th>Reported by</th><th></th></tr></thead>
+        <tbody>{% for incident in incidents %}
+            <tr>
+                <td>{{ incident.created_at[:16] }}</td>
+                <td><a href="{{ url_for('incident_detail', incident_id=incident.id) }}"><strong>{{ incident.title }}</strong></a><small class="cell-sub">{{ incident.location }}</small></td>
+                <td><span class="status">{{ incident.category|replace('_', ' ')|title }}</span></td>
+                <td><span class="status status-{{ incident.status }}">{{ incident.status|replace('_', ' ')|title }}</span></td>
+                <td>{{ incident.resident_name or "Resident" }}</td>
+                <td><a href="{{ url_for('incident_detail', incident_id=incident.id) }}" class="button button-small button-quiet">View</a></td>
+            </tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state"><span class="empty-icon"><i data-lucide="alert-circle"></i></span><strong>No incidents reported yet</strong><p>Incident reports will appear here.</p></div>
+    {% endif %}
+</section>
+{% if user.role in ("admin", "official") or user.role == "resident" %}
+<div class="modal-overlay" id="incident-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="incident-title">
+        <div class="modal-head">
+            <div><span class="eyebrow">REPORT INCIDENT</span><h2 id="incident-title">New incident report</h2></div>
+            <button class="modal-close" type="button" data-close-modal aria-label="Close"><i data-lucide="x"></i></button>
+        </div>
+        <p class="muted">Reports are logged and visible to barangay officials. For life-threatening emergencies, call emergency services immediately.</p>
+        <form method="post" action="{{ url_for('create_incident') }}" class="form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="title">Title</label>
+            <input id="title" name="title" maxlength="150" required placeholder="e.g. Streetlight not working on Main Street">
+            <label for="category">Category</label>
+            <select id="category" name="category" required>
+                <option value="streetlights">Streetlights</option>
+                <option value="flooding">Flooding</option>
+                <option value="garbage">Garbage</option>
+                <option value="water">Water</option>
+                <option value="electricity">Electricity</option>
+                <option value="roads">Roads</option>
+                <option value="security">Security</option>
+                <option value="other">Other</option>
+            </select>
+            <label for="location">Location (street, purok, landmark)</label>
+            <input id="location" name="location" maxlength="200" placeholder="Where is the issue?">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="4" maxlength="1000" required placeholder="Describe what is happening and when it started"></textarea>
+            <div class="modal-actions">
+                <button class="button button-quiet" type="button" data-close-modal>Cancel</button>
+                <button class="button button-primary modal-submit" type="submit">Submit report</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(() => {
+    const openBtn = document.getElementById("incident-open");
+    const overlay = document.getElementById("incident-modal");
+    if (!openBtn || !overlay) return;
+    const firstInput = overlay.querySelector("input[name='title']");
+    const open = () => {
+        overlay.hidden = false;
+        document.body.classList.add("modal-open");
+        if (firstInput) firstInput.focus();
+    };
+    const close = () => {
+        overlay.hidden = true;
+        document.body.classList.remove("modal-open");
+        openBtn.focus();
+    };
+    openBtn.addEventListener("click", open);
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay || event.target.closest("[data-close-modal]")) close();
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !overlay.hidden) close();
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
