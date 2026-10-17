@@ -37,6 +37,34 @@
         <main class="main-area">
             <header class="topbar">
                 <div class="breadcrumb">Workspace <span>/</span> <strong>{{ page_title }}</strong></div>
+                <div class="notification-bell" title="Announcements">
+                    <button class="bell-button" id="notification-bell-button" type="button" aria-label="Notifications">
+                        <i data-lucide="bell"></i>
+                        {% if notification_count and notification_count > 0 %}
+                        <span class="badge">{{ notification_count }}</span>
+                        {% endif %}
+                    </button>
+                    <div class="notification-dropdown" id="notification-dropdown" role="menu" hidden>
+                        <div class="notification-header"><strong>New Announcements</strong><span class="notification-close" id="notification-close">×</span></div>
+                        {% with announcements = recent_announcements or [] %}
+                        {% if announcements %}
+                        <ul class="notification-list">
+                            {% for post in announcements[:5] %}
+                            <li class="notification-item">
+                                <a href="{{ url_for('announcements_page') }}" class="notification-link">
+                                    <span class="notification-title">{{ post.title }}</span>
+                                    <span class="notification-time">{{ post.created_at[:16] }}</span>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="notification-empty">No new announcements.</p>
+                        {% endif %}
+                        {% endwith %}
+                        <div class="notification-footer"><a href="{{ url_for('announcements_page') }}">View all announcements</a></div>
+                    </div>
+                </div>
                 <div class="profile-menu">
                     <div class="profile-copy"><strong>{{ user.full_name }}</strong><span>{{ user.role|replace('_', ' ')|title }}</span></div>
                     <button class="avatar-button" id="profile-menu-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="profile-menu-dropdown" title="Account options">
@@ -226,6 +254,31 @@
                         timer = setTimeout(() => form.submit(), 450);
                     });
                 }
+            });
+        })();
+        (() => {
+            const bell = document.getElementById("notification-bell-button");
+            const dropdown = document.getElementById("notification-dropdown");
+            const close = document.getElementById("notification-close");
+            if (!bell || !dropdown) return;
+            const closeDropdown = () => {
+                dropdown.hidden = true;
+            };
+            bell.addEventListener("click", (event) => {
+                event.stopPropagation();
+                dropdown.hidden = !dropdown.hidden;
+            });
+            close.addEventListener("click", (event) => {
+                event.stopPropagation();
+                closeDropdown();
+            });
+            document.addEventListener("click", (event) => {
+                if (!dropdown.hidden && !dropdown.contains(event.target) && !bell.contains(event.target)) {
+                    closeDropdown();
+                }
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") closeDropdown();
             });
         })();
         (() => {

@@ -245,7 +245,27 @@ def csrf_token():
 app.jinja_env.globals["csrf_token"] = csrf_token
 
 
-@app.context_processor
+def get_notification_count(user):
+    if not user or user["role"] != "resident":
+        return 0
+    with get_db() as db:
+        count = db.execute(
+            """SELECT COUNT(*) FROM announcements
+               WHERE created_at >= datetime('now', '-7 days')"""
+        ).fetchone()[0]
+    return count
+
+
+def get_recent_announcements(limit=5):
+    with get_db() as db:
+        return db.execute(
+            """SELECT announcements.*, users.full_name AS author_name
+               FROM announcements LEFT JOIN users ON users.id = announcements.created_by
+               ORDER BY created_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+
 def navigation_context():
     pages = {
         "dashboard": (
@@ -313,9 +333,12 @@ def navigation_context():
             moss_suggestions = ["I need a certificate", "I have a concern"]
     elif session.get("user_role") in ("admin", "official"):
         moss_suggestions = ["View incidents", "Manage FAQs"]
+    user = current_user()
     return {
         "page_title": page_title,
         "page_description": page_description,
+        "notification_count": get_notification_count(user),
+        "recent_announcements": get_recent_announcements() if user and user["role"] == "resident" else [],
         "active_page": {
             "dashboard": "dashboard",
             "requests_page": "requests",
