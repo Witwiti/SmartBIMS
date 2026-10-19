@@ -375,7 +375,7 @@ td strong { color: #2a3934; font-size: 11px; font-weight: 600; }
     .main-area { width: calc(100% - 58px); margin-left: 0; }
     .topbar { height: 60px; padding: 0 16px; }
     .breadcrumb { font-size: 10px; }
-    .profile-copy strong { max-width: 125px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .profile-copy { display: none; }
     .content { padding: 25px 16px 20px; }
     .page-heading { align-items: flex-start; }
     .role-badge { display: none; }
@@ -519,16 +519,41 @@ td strong { color: #2a3934; font-size: 11px; font-weight: 600; }
     text-decoration: none;
     color: inherit;
 }
+.notification-icon {
+    display: inline-grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 8px;
+    background: #f1f6f3;
+    font-size: 15px;
+    line-height: 1;
+}
 .notification-title {
     display: block;
+    margin-top: 8px;
     font-size: 12px;
     font-weight: 600;
     color: #2a3934;
 }
 .notification-time {
+    display: inline-block;
     margin-top: 3px;
     color: #83908a;
     font-size: 10px;
+}
+.notification-new {
+    display: inline-block;
+    margin: 3px 0 0 6px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #eaf4ef;
+    color: var(--green);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    vertical-align: middle;
 }
 .notification-empty {
     padding: 20px 14px;
@@ -541,7 +566,8 @@ td strong { color: #2a3934; font-size: 11px; font-weight: 600; }
     border-top: 1px solid #edf0ee;
 }
 .notification-footer a {
-    display: block;
+    display: inline-block;
+    margin: 0 5px;
     text-align: center;
     color: var(--green);
     font-size: 12px;
@@ -551,6 +577,29 @@ td strong { color: #2a3934; font-size: 11px; font-weight: 600; }
 .notification-footer a:hover {
     color: #0e4f3d;
     text-decoration: underline;
+}
+
+/* Notification bell — mobile overrides.
+   Placed after the base notification rules so they win over them. */
+@media (max-width: 760px) {
+    /* Keep the bell grouped with the profile button on the right. */
+    .notification-bell {
+        position: static;
+        margin-left: auto;
+        margin-right: 8px;
+    }
+    /* Anchor the panel to the topbar instead of the bell button so it
+       stays inside the viewport instead of overflowing off-screen. */
+    .notification-dropdown {
+        top: calc(100% + 6px);
+        right: 16px;
+        width: min(340px, calc(100vw - 32px));
+        max-height: calc(100vh - 84px);
+        overflow: hidden;
+    }
+    .notification-list {
+        min-height: 0;
+    }
 }
 
 /* New feature styles */

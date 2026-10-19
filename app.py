@@ -385,6 +385,7 @@ def get_recent_notifications(user, limit=5):
             return items[:limit]
 
 
+@app.context_processor
 def navigation_context():
     pages = {
         "dashboard": (
