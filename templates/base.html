@@ -141,7 +141,7 @@
             {% endif %}
         </nav>
     </div>
-    <details class="moss-widget {% if session.get('moss_boot_seen') %}moss-booted{% endif %}" id="moss-chat" data-boot-id="{{ session.get('moss_boot_id', '') }}" {% if request.args.get('moss') == 'open' %}open{% endif %}>
+    <details class="moss-widget {% if session.get('moss_boot_seen') %}moss-booted{% endif %}" id="moss-chat" data-boot-id="{{ session.get('moss_boot_id', '') }}" data-csrf="{{ csrf_token() }}" {% if request.args.get('moss') == 'open' %}open{% endif %}>
         <summary class="moss-launcher" aria-label="Open Moss Virtual Assistant">
             <img class="moss-launcher-image" src="{{ url_for('static', filename='moss-robot.png') }}" alt="" aria-hidden="true">
             <span class="moss-notification" aria-hidden="true"></span>
@@ -299,24 +299,70 @@
             const widget = document.getElementById("moss-chat");
             if (!widget || !widget.dataset.bootId) return;
 
+            const bootScreen = widget.querySelector(".moss-boot-screen");
+            if (!bootScreen) return;
+
+            // localStorage rather than sessionStorage, so the boot animation plays
+            // once per login across every tab of this browser. The key carries the
+            // per-login id, so a new login starts a fresh boot.
             const storageKey = `moss-boot-${widget.dataset.bootId}`;
+            let bootTimer = null;
+            let booted = false;
+
+            const finishBoot = () => {
+                booted = true;
+                window.clearTimeout(bootTimer);
+                widget.classList.remove("moss-booting");
+                widget.classList.add("moss-booted");
+            };
+
+            const markBooted = () => {
+                window.localStorage.setItem(storageKey, "1");
+                // Let the server know this login has already had the animation.
+                if (widget.dataset.csrf) {
+                    window.fetch("/assistant/booted", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({ csrf_token: widget.dataset.csrf }),
+                    }).catch(() => {});
+                }
+            };
+
             const startBoot = () => {
-                if (widget.classList.contains("moss-booted")) return;
-                if (sessionStorage.getItem(storageKey)) {
+                if (booted || widget.classList.contains("moss-booted")) return;
+                if (window.localStorage.getItem(storageKey)) {
                     widget.classList.add("moss-booted");
                     return;
                 }
-                sessionStorage.setItem(storageKey, "1");
                 widget.classList.add("moss-booting");
+                // Safety net for browsers that never run the animation, such as
+                // when the user asks for reduced motion.
+                bootTimer = window.setTimeout(() => {
+                    markBooted();
+                    finishBoot();
+                }, 2400);
             };
 
             widget.addEventListener("toggle", () => {
                 if (widget.open) startBoot();
             });
-            widget.querySelector(".moss-boot-screen").addEventListener("animationend", () => {
-                widget.classList.remove("moss-booting");
-                widget.classList.add("moss-booted");
+
+            // Only the boot screen's own animation may finish the boot. The robot
+            // inside it runs its own animations and their events bubble up, which
+            // would otherwise cancel the boot animation a few milliseconds in.
+            bootScreen.addEventListener("animationend", (event) => {
+                if (event.target !== bootScreen || event.animationName !== "moss-boot-screen") return;
+                markBooted();
+                finishBoot();
             });
+
+            // An interrupted boot has to be allowed to play again next time.
+            bootScreen.addEventListener("animationcancel", (event) => {
+                if (event.target !== bootScreen || booted) return;
+                window.clearTimeout(bootTimer);
+                widget.classList.remove("moss-booting");
+            });
+
             if (widget.open) startBoot();
         })();
     </script>

@@ -347,6 +347,24 @@ class MossTestCase(unittest.TestCase):
         self.assertEqual(count, 0)
         self.assertIn("profile is incomplete", self._tool_messages()[-1]["error"].lower())
 
+    def test_boot_beacon_marks_the_animation_as_seen(self):
+        self._login()
+        html = self.client.get("/dashboard").get_data(as_text=True)
+        self.assertIn("moss-widget", html)
+        self.assertNotIn("moss-widget moss-booted", html)
+
+        token = self._csrf("/dashboard")
+        response = self.client.post("/assistant/booted", data={"csrf_token": token})
+        self.assertEqual(response.status_code, 204)
+
+        html = self.client.get("/dashboard").get_data(as_text=True)
+        self.assertIn("moss-widget moss-booted", html)
+
+    def test_boot_beacon_requires_a_csrf_token(self):
+        self._login()
+        response = self.client.post("/assistant/booted", data={"csrf_token": "wrong"})
+        self.assertEqual(response.status_code, 400)
+
     def test_ai_cannot_touch_another_residents_request(self):
         # Give the second resident a request that the first resident may not touch.
         with bims.get_db() as db:

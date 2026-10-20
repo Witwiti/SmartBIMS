@@ -2105,6 +2105,14 @@ def assistant():
     return redirect(return_to + "?moss=open#moss-chat")
 
 
+@app.route("/assistant/booted", methods=["POST"])
+@login_required
+def assistant_booted():
+    """Record that the Moss boot animation has already played for this login."""
+    session["moss_boot_seen"] = True
+    return Response("", status=204)
+
+
 @app.route("/assistant/clear", methods=["POST"])
 @login_required
 def assistant_clear():
