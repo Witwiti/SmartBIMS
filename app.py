@@ -1,9 +1,11 @@
 import csv
 import io
+import logging
 import os
 import re
 import secrets
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import date, datetime
 from functools import wraps
@@ -22,6 +24,8 @@ from flask import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from moss_ai import MossAIError, MossAssistant
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = Path(os.environ.get("BIMS_DATABASE", BASE_DIR / "instance" / "bims.sqlite3"))
@@ -33,6 +37,17 @@ REQUEST_TYPES = {
     "Other",
 }
 REQUEST_STATUSES = {"Pending", "Processing", "Ready for pickup", "Completed", "Declined"}
+INCIDENT_CATEGORIES = {
+    "streetlights",
+    "flooding",
+    "garbage",
+    "water",
+    "electricity",
+    "roads",
+    "security",
+    "other",
+}
+INCIDENT_STATUSES = {"open", "in_progress", "resolved", "closed"}
 REQUEST_TYPE_ALIASES = {
     "Barangay clearance": ("barangay clearance", "clearance"),
     "Certificate of residency": (
@@ -209,6 +224,13 @@ def init_db():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS moss_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -263,6 +285,86 @@ def log_request_event(request_id, actor_id, old_status, new_status, note=""):
                VALUES (?, ?, ?, ?, ?)""",
             (request_id, actor_id, old_status or "", new_status or "", (note or "")[:500]),
         )
+
+
+# Moss keeps its conversation in the database rather than in the session cookie,
+# so the AI gets a usable context window without bloating the cookie.
+MOSS_HISTORY_ROWS = 40
+MOSS_RATE_LIMIT = {"per_minute": 10, "per_hour": 60}
+
+
+def append_assistant_exchange(user_id, user_message, reply):
+    """Store one Moss chat exchange and keep only the most recent turns."""
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO moss_messages (user_id, role, content) VALUES (?, 'user', ?)",
+            (user_id, (user_message or "")[:1000]),
+        )
+        db.execute(
+            "INSERT INTO moss_messages (user_id, role, content) VALUES (?, 'assistant', ?)",
+            (user_id, (reply or "")[:4000]),
+        )
+        db.execute(
+            """DELETE FROM moss_messages WHERE user_id = ? AND id NOT IN (
+                   SELECT id FROM moss_messages WHERE user_id = ? ORDER BY id DESC LIMIT ?)""",
+            (user_id, user_id, MOSS_HISTORY_ROWS),
+        )
+
+
+def get_moss_history(user_id, limit=16):
+    """Return the recent Moss conversation in chat-completion message format."""
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT role, content FROM moss_messages WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    history = []
+    for row in reversed(rows):
+        content = (row["content"] or "").strip()
+        if not content:
+            continue
+        history.append(
+            {"role": "user" if row["role"] == "user" else "assistant", "content": content}
+        )
+    return history
+
+
+def get_moss_display_messages(user_id, limit=12):
+    """Return the recent Moss conversation shaped for the chat widget."""
+    return [
+        {
+            "speaker": "You" if entry["role"] == "user" else "Moss",
+            "text": entry["content"],
+        }
+        for entry in get_moss_history(user_id, limit)
+    ]
+
+
+def clear_assistant_history(user_id):
+    with get_db() as db:
+        db.execute("DELETE FROM moss_messages WHERE user_id = ?", (user_id,))
+
+
+def moss_rate_limited():
+    """Throttle assistant messages so a single user cannot burn through the API."""
+    now = time.time()
+    counters = session.get("moss_rate") or {}
+    minute = counters.get("minute") or {}
+    hour = counters.get("hour") or {}
+    if now - minute.get("start", 0) > 60:
+        minute = {"start": now, "count": 0}
+    if now - hour.get("start", 0) > 3600:
+        hour = {"start": now, "count": 0}
+    if (
+        minute.get("count", 0) >= MOSS_RATE_LIMIT["per_minute"]
+        or hour.get("count", 0) >= MOSS_RATE_LIMIT["per_hour"]
+    ):
+        session["moss_rate"] = {"minute": minute, "hour": hour}
+        return True
+    minute["count"] = minute.get("count", 0) + 1
+    hour["count"] = hour.get("count", 0) + 1
+    session["moss_rate"] = {"minute": minute, "hour": hour}
+    return False
 
 
 def latest_announcements(limit=5):
@@ -437,9 +539,29 @@ def navigation_context():
         request.endpoint,
         ("Barangay Portal", "Barangay Information Management System."),
     )
+    user = current_user()
     pending = session.get("pending_service_request")
+    moss_ai = moss.mode()
     moss_suggestions = []
-    if isinstance(pending, dict) and pending.get("resident_id") == session.get("user_id"):
+    if moss_ai["mode"] == "ai":
+        if session.get("moss_pending_action"):
+            moss_suggestions = ["Yes, go ahead", "Cancel that"]
+        elif user and user["role"] == "resident":
+            if session.get("moss_awaiting_profile"):
+                moss_suggestions = ["Complete my profile"]
+            else:
+                moss_suggestions = [
+                    "I need a certificate",
+                    "What is my request status?",
+                    "I have a concern",
+                ]
+        elif user:
+            moss_suggestions = [
+                "How many pending requests are there?",
+                "Any announcements?",
+                "Show me the open concerns",
+            ]
+    elif isinstance(pending, dict) and pending.get("resident_id") == session.get("user_id"):
         if pending.get("stage") == "choose_type":
             moss_suggestions = sorted(REQUEST_TYPES - {"Other"})
         elif pending.get("stage") == "purpose":
@@ -453,12 +575,14 @@ def navigation_context():
             moss_suggestions = ["I need a certificate", "I have a concern"]
     elif session.get("user_role") in ("admin", "official"):
         moss_suggestions = ["View incidents", "Manage FAQs"]
-    user = current_user()
     return {
         "page_title": page_title,
         "page_description": page_description,
         "notification_count": get_notification_count(user),
         "recent_notifications": get_recent_notifications(user) if user and user["role"] == "resident" else [],
+        "moss_ai_mode": moss_ai["mode"],
+        "moss_ai_detail": moss_ai["detail"],
+        "assistant_messages": get_moss_display_messages(user["id"], 12) if user else [],
         "active_page": {
             "dashboard": "dashboard",
             "requests_page": "requests",
@@ -477,7 +601,6 @@ def navigation_context():
             "blotters_page": "blotters",
             "blotter_detail": "blotters",
         }.get(request.endpoint, ""),
-        "assistant_messages": session.get("assistant_messages", []),
         "moss_suggestions": moss_suggestions,
     }
 
@@ -606,6 +729,22 @@ def profile_is_complete(user):
         return False
 
 
+moss = MossAssistant(
+    get_db=get_db,
+    log_activity=log_activity,
+    create_notification=create_notification,
+    log_request_event=log_request_event,
+    build_url=url_for,
+    profile_is_complete=profile_is_complete,
+    request_types=REQUEST_TYPES,
+    request_statuses=REQUEST_STATUSES,
+    incident_categories=INCIDENT_CATEGORIES,
+    incident_statuses=INCIDENT_STATUSES,
+    confirmation_words=CONFIRMATION_WORDS,
+    cancellation_words=CANCELLATION_WORDS,
+)
+
+
 def assistant_reply(message, user):
     text = " ".join(message.casefold().split())
     # 1. Check FAQs first
@@ -720,19 +859,6 @@ def extract_request_purpose(message):
     purpose = match.group(1).strip(" \t,;:")
     purpose = re.sub(r"\bplease\s+submit\s*$", "", purpose, flags=re.IGNORECASE).strip()
     return purpose[:500]
-
-
-def append_assistant_exchange(user_message, reply):
-    messages = session.get("assistant_messages", [])
-    if not isinstance(messages, list):
-        messages = []
-    messages.extend(
-        [
-            {"speaker": "You", "text": user_message[:300]},
-            {"speaker": "Moss", "text": reply},
-        ]
-    )
-    session["assistant_messages"] = messages[-12:]
 
 
 def assistant_request_action(message, user):
@@ -1588,11 +1714,8 @@ def incidents_page():
     search = request.args.get("search", "").strip()[:80]
     status_filter = request.args.get("status", "").strip()
     category_filter = request.args.get("category", "").strip()
-    valid_statuses = {"open", "in_progress", "resolved", "closed"}
-    valid_categories = {
-        "streetlights", "flooding", "garbage", "water", "electricity",
-        "roads", "security", "other",
-    }
+    valid_statuses = INCIDENT_STATUSES
+    valid_categories = INCIDENT_CATEGORIES
     if status_filter not in valid_statuses:
         status_filter = ""
     if category_filter not in valid_categories:
@@ -1638,10 +1761,7 @@ def create_incident():
     description = request.form.get("description", "").strip()[:1000]
     category = request.form.get("category", "other").strip()
     location = request.form.get("location", "").strip()[:200]
-    valid_categories = {
-        "streetlights", "flooding", "garbage", "water", "electricity",
-        "roads", "security", "other",
-    }
+    valid_categories = INCIDENT_CATEGORIES
     if category not in valid_categories:
         category = "other"
     if not title or not description:
@@ -1691,7 +1811,7 @@ def incident_detail(incident_id):
         "incident_detail.html",
         user=user,
         incident=incident,
-        statuses={"open", "in_progress", "resolved", "closed"},
+        statuses=INCIDENT_STATUSES,
         today=date.today().strftime("%A, %B %d, %Y"),
     )
 
@@ -1952,11 +2072,35 @@ def assistant():
         if message.strip().lower() == "manage faqs":
             return redirect(url_for("faqs_page") + "?moss=open#moss-chat")
 
-    reply = assistant_request_action(message, user)
-    append_assistant_exchange(
-        message,
-        reply if reply is not None else assistant_reply(message, user),
-    )
+    if moss_rate_limited():
+        flash("You are sending messages too quickly. Please wait a moment and try again.", "error")
+        return redirect(return_to + "?moss=open#moss-chat")
+
+    reply = None
+    if moss.mode()["mode"] == "ai":
+        try:
+            reply = moss.chat(
+                message=message,
+                user=user,
+                history=get_moss_history(user["id"]),
+                session=session,
+            )
+            # The AI owns the conversation while it is enabled.
+            session.pop("pending_service_request", None)
+        except MossAIError as exc:
+            session.pop("moss_pending_action", None)
+            logging.getLogger("bims").warning("Moss AI unavailable: %s", exc)
+            flash("Moss could not reach the AI service, so it answered offline instead.", "error")
+        except Exception:
+            session.pop("moss_pending_action", None)
+            logging.getLogger("bims").exception("Moss AI failed unexpectedly")
+            flash("Moss hit an unexpected problem and answered offline instead.", "error")
+
+    if reply is None:
+        reply = assistant_request_action(message, user)
+        if reply is None:
+            reply = assistant_reply(message, user)
+    append_assistant_exchange(user["id"], message, reply)
     session["moss_boot_seen"] = True
     return redirect(return_to + "?moss=open#moss-chat")
 
@@ -1964,7 +2108,9 @@ def assistant():
 @app.route("/assistant/clear", methods=["POST"])
 @login_required
 def assistant_clear():
-    session.pop("assistant_messages", None)
+    clear_assistant_history(current_user()["id"])
+    session.pop("moss_pending_action", None)
+    session.pop("moss_last_executed", None)
     session.pop("pending_service_request", None)
     flash("Chat with Moss cleared.", "success")
     return_to = request.form.get("return_to", url_for("dashboard"))

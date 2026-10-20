@@ -173,7 +173,7 @@
                     </span>
                     <span class="moss-robot-body"><i></i></span>
                 </div>
-                <div class="moss-title"><strong>Moss</strong><span class="moss-boot-status"><i></i><span class="moss-boot-label">Powering up...</span><span class="moss-ready-label">Virtual assistant · Online</span></span></div>
+                <div class="moss-title"><strong>Moss</strong><span class="moss-boot-status"><i></i><span class="moss-boot-label">Powering up...</span><span class="moss-ready-label">{{ "AI assistant · Online" if moss_ai_mode == "ai" else "Virtual assistant · Online" }}</span></span></div>
             </header>
             <p class="moss-intro">Ask me about services, or say “I need a barangay clearance for work.” I’ll ask your permission before submitting a request.</p>
             <div class="moss-messages" aria-live="polite">
@@ -223,7 +223,7 @@
                 <input id="moss-message" name="message" type="text" maxlength="300" placeholder="Message Moss..." autocomplete="off" required>
                 <button type="submit" aria-label="Send message"><i data-lucide="arrow-up"></i></button>
             </form>
-            <p class="moss-disclaimer">Moss replies locally. For official advice, contact your barangay office.</p>
+            <p class="moss-disclaimer">{% if moss_ai_mode == 'ai' %}Moss is an AI assistant. Your messages are sent to the AI provider ({{ moss_ai_detail }}) to generate a reply.{% else %}Moss replies locally.{% endif %} For official advice, contact your barangay office.</p>
         </section>
     </details>
     <script src="{{ url_for('static', filename='lucide.min.js') }}"></script>
